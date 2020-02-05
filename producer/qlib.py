@@ -3,7 +3,7 @@ import json
 import pika
 from retry import retry
 
-from producer.tasks import produce_poses
+from producer.tasks import produce_poses_job
 
 from producer.helpers import get_logger
 
@@ -29,7 +29,7 @@ def job_processor(ch, method, properties, body):
     logger.info(json.dumps(msg))
     job = msg.get("job")
     logger.info('job: {}'.format(job))
-    produce_poses(msg)
+    produce_poses_job(msg)
 
 
 def start_consuming(channel, queue_name):

@@ -1,12 +1,11 @@
 import os
 import sys
-from pathlib import Path
 from traceback import print_exc
 
 import click
 
 from producer.helpers import get_logger
-from producer.tasks import get_json
+from producer.tasks import produce_poses
 from producer.qlib import connect_to_rabbit, close, start_consuming
 
 
@@ -20,6 +19,16 @@ logger = get_logger()
 @click.pass_context
 def main(ctx):
     pass
+
+
+@main.command()
+@click.pass_context
+@click.argument('videopath')
+def generate_pose(ctx, videopath):
+    logger.info('running generate_pose')
+    logger.info('videopath: {}'.format(videopath))
+    output = produce_poses(videopath)
+    click.echo(output)
 
 
 @main.command()

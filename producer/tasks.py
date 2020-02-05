@@ -7,7 +7,7 @@ from minimal_honeycomb import MinimalHoneycombClient
 
 from producer.helpers import get_json, get_logger
 
-GPU = os.getenv('GPU', 0)
+GPUS = os.getenv('GPUS', '0')
 
 HONEYCOMB_URL = os.getenv('HONEYCOMB_URL')
 HONEYCOMB_TOKEN_URI = os.getenv('HONEYCOMB_TOKEN_URI')
@@ -18,6 +18,8 @@ HONEYCOMB_CLIENT_SECRET = os.getenv('HONEYCOMB_CLIENT_SECRET')
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 MODEL_NAME = "COCO-17"
+
+# TIMEOUT = os.getenv('TIMEOUT', 3600)
 
 logger = get_logger()
 
@@ -106,15 +108,15 @@ def parse_pose_json(pose_json, video_data):
             }, p.client)
 
 
-def produce_poses(video_data):
-    video_path = video_data['path']
-    logger.info("processing video: {}".format(video_path))
-
+def produce_poses(video_path):
     video_name = Path(video_path).resolve().stem
     logger.info("video_name: {}".format(video_name))
 
     base_path = os.path.dirname(os.path.abspath(video_path))
+    logger.info("base_path: {}".format(base_path))
+
     outdir = os.path.join(base_path, video_name)
+    logger.info("outdir: {}".format(outdir))
 
     cmd = [
         "python3",
@@ -124,7 +126,7 @@ def produce_poses(video_data):
         "--checkpoint",
         "pretrained_models/fast_res50_256x192.pth",
         "--gpus",
-        GPU,
+        str(GPUS),
         "--sp",
         "--posebatch",
         '200',
@@ -137,8 +139,11 @@ def produce_poses(video_data):
         outdir
     ]
     logger.debug(cmd)
+    subprocess.run(cmd)
+    return get_json(outdir)
 
-    subprocess.run(cmd, stdout=subprocess.PIPE)
-    pose_json = get_json(outdir)
+
+def produce_poses_job(video_data):
+    pose_json = produce_poses(video_data['path'])
     parse_pose_json(pose_json, video_data)
     logger.debug(pose_json.keys())

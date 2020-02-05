@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pose-producer
+  namespace: inference
+  labels:
+    name: pose-producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: pose-producer
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        name: pose-producer
+    spec:
+      nodeSelector:
+        gpu-type: RTX
+      restartPolicy: Always
+      containers:
+        - name: pose-producer
+          image: wildflowerschools/wf-deep-docker:pose-producer-v10
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+          env:
+            - name: RABBIT_HOST
+              value: rabbitmq-video-queue.inference.svc.cluster.local
+            - name: VIDEO_QUEUE_NAME
+              value: pose-processing-queue
+            - name: LOG_LEVEL
+              value: DEBUG
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+            type: Directory

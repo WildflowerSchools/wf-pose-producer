@@ -30,6 +30,7 @@ def job_processor(ch, method, properties, body):
     job = msg.get("job")
     logger.info('job: {}'.format(job))
     produce_poses_job(msg)
+    ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 def start_consuming(channel, queue_name):

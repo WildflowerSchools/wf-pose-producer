@@ -21,7 +21,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: pose-producer
-          image: wildflowerschools/wf-deep-docker:pose-producer-v16
+          image: wildflowerschools/wf-deep-docker:pose-producer-v22
           volumeMounts:
           - name: data
             mountPath: /data
@@ -35,6 +35,10 @@ spec:
               value: pose-processing-queue
             - name: LOG_LEVEL
               value: DEBUG
+            - name: GPUS
+              value: "0"
+            - name: PYTHONUNBUFFERED
+              value: "1"
       volumes:
         - name: data
           hostPath:

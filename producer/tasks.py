@@ -5,7 +5,7 @@ from pathlib import Path
 
 from minimal_honeycomb import MinimalHoneycombClient
 
-from producer.helpers import get_json, get_logger
+from producer.helpers import get_json, get_logger, output_json_exists
 
 GPUS = os.getenv('GPUS', '0')
 
@@ -80,32 +80,31 @@ def parse_pose_json(pose_json, video_data):
     logger.info('pose_model_id: {}'.format(str(pose_model_id)))
     video_timestamp = datetime.strptime(video_data.get('timestamp'), ISO_FORMAT)
 
-    for jpg, meta in pose_json.items():
-        sec = int(jpg.split('.')[0])
+    for meta in pose_json:
+        sec = int(meta.get("image_id").split('.')[0], 10)
         new_timestamp = video_timestamp + timedelta(seconds=sec * 0.1)
-        for poses in meta['bodies']:
-            logger.info('poses count: {}'.format(str(len(poses['joints']))))
-            keypoints = []
-            joints = poses['joints']
-            while joints:
-                keypoints.append({'coordinates': [joints.pop(0), joints.pop(0)], 'quality': joints.pop(0)})
-
-            logger.info('keypoints count: {}'.format(str(len(keypoints))))
-            put_pose_data({
-                'pose2D': {
-                    'type': 'Pose2DInput',
-                    'value': {
-                        'timestamp': new_timestamp.strftime(ISO_FORMAT),
-                        'camera': video_data.get('device_id'),
-                        'pose_model': pose_model_id,
-                        'keypoints': keypoints,
-                        'tags': [
-                            'original-timestamp: {}'.format(video_timestamp),
-                            'env: test'
-                        ]
-                    }
+        keypoints = []
+        joints = meta['keypoints']
+        while joints:
+            keypoints.append({'coordinates': [joints.pop(0), joints.pop(0)], 'quality': joints.pop(0)})
+        logger.info('keypoints count: {}'.format(str(len(keypoints))))
+        put_pose_data({
+            'pose2D': {
+                'type': 'Pose2DInput',
+                'value': {
+                    'timestamp': new_timestamp.strftime(ISO_FORMAT),
+                    'camera': video_data.get('device_id'),
+                    'pose_model': pose_model_id,
+                    'keypoints': keypoints,
+                    'quality': meta.get("score"),
+                    'track_label': str(meta.get("idx")),
+                    'tags': [
+                        'original-timestamp: {}'.format(video_timestamp),
+                        'env: test'
+                    ]
                 }
-            }, p.client)
+            }
+        }, p.client)
 
 
 def produce_poses(video_path):
@@ -117,7 +116,10 @@ def produce_poses(video_path):
 
     outdir = os.path.join(base_path, video_name)
     logger.info("outdir: {}".format(outdir))
-
+    if output_json_exists(outdir):
+        pose_json = get_json(outdir)
+        if "idx" in pose_json[0] and pose_json[0]["idx"] and  "idx" in pose_json[-1] and pose_json[-1]["idx"]:
+            return pose_json
     cmd = [
         "python3",
         "scripts/demo_inference.py",

@@ -48,7 +48,7 @@ def process_video(ctx, rabbitmq=None, queue=None):
         start_consuming(channel, que)
     except KeyboardInterrupt:
         close(channel)
-    except Exception as e:
+    except Exception:
         print_exc()
         close(channel)
         sys.exit(-1)

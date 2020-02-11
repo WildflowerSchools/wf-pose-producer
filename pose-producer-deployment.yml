@@ -22,6 +22,7 @@ spec:
       containers:
         - name: pose-producer
           image: wildflowerschools/wf-deep-docker:pose-producer-v32
+          imagePullPolicy: Always
           volumeMounts:
           - name: data
             mountPath: /data

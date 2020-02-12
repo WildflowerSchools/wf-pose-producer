@@ -18,6 +18,10 @@ HONEYCOMB_AUDIENCE = os.getenv('HONEYCOMB_AUDIENCE')
 HONEYCOMB_CLIENT_ID = os.getenv('HONEYCOMB_CLIENT_ID')
 HONEYCOMB_CLIENT_SECRET = os.getenv('HONEYCOMB_CLIENT_SECRET')
 
+BATCH_SIZE = int(os.getenv("HONEYCOMB_BATCH_SIZE", 50))
+
+ENABLE_POSEFLOW = (os.getenv("ENABLE_POSEFLOW", "yes") == "yes")
+
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 MODEL_NAME = "COCO-17"
@@ -102,11 +106,12 @@ def parse_pose_json(pose_json, video_data):
         })
 
     bulk_args['pose2D']['value'] = bulk_values
-    logger.debug(json.dumps(bulk_args))
+    # logger.debug(json.dumps(bulk_args))
     # logger.debug(len(bulk_args['pose2D']['value']))
 
-    response = p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=5)
-    logger.info(response)
+    response = p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=BATCH_SIZE)
+    logger.info("honeycomb upload complete")
+    # logger.info(response)
 
 
 def produce_poses(video_path):
@@ -143,6 +148,8 @@ def produce_poses(video_path):
         "--outdir",
         outdir
     ]
+    if not ENABLE_POSEFLOW:
+      cmd.remove('--pose_track')
     logger.debug(cmd)
     subprocess.run(cmd)
     return get_json(outdir)

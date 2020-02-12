@@ -14,7 +14,7 @@ logger = get_logger()
 
 @retry(pika.exceptions.AMQPConnectionError, delay=5)
 def connect_to_rabbit(host, queue):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=host, heartbeat=6, blocked_connection_timeout=60*60*10))
     channel = connection.channel()
     channel.queue_declare(queue=queue, durable=True)
     return channel

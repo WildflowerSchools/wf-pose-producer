@@ -12,4 +12,4 @@ RUN cd /opt && pip install .
 
 WORKDIR /build/AlphaPose
 
-CMD ["producer", "process-video"]
+CMD ["producer", "consume-queue"]

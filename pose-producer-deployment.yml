@@ -21,7 +21,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: pose-producer
-          image: wildflowerschools/wf-deep-docker:pose-producer-v35
+          image: wildflowerschools/wf-deep-docker:pose-producer-v48
           imagePullPolicy: Always
           volumeMounts:
           - name: data
@@ -43,7 +43,7 @@ spec:
             - name: HONEYCOMB_BATCH_SIZE
               value: "500"
             - name: ENABLE_POSEFLOW
-              value: "no"
+              value: "yes"
       volumes:
         - name: data
           hostPath:

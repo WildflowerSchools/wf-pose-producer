@@ -1,4 +1,4 @@
-import json
+import logging
 import os
 import subprocess
 from datetime import datetime, timedelta
@@ -6,7 +6,10 @@ from pathlib import Path
 
 from minimal_honeycomb import MinimalHoneycombClient
 
-from producer.helpers import get_json, get_logger, output_json_exists
+from producer.helpers import get_json, output_json_exists
+
+BATCH_SIZE = int(os.getenv("HONEYCOMB_BATCH_SIZE", 50))
+ENABLE_POSEFLOW = (os.getenv("ENABLE_POSEFLOW", "yes") == "yes")
 
 ENV = os.getenv('ENV', 'test')
 
@@ -18,17 +21,15 @@ HONEYCOMB_AUDIENCE = os.getenv('HONEYCOMB_AUDIENCE')
 HONEYCOMB_CLIENT_ID = os.getenv('HONEYCOMB_CLIENT_ID')
 HONEYCOMB_CLIENT_SECRET = os.getenv('HONEYCOMB_CLIENT_SECRET')
 
-BATCH_SIZE = int(os.getenv("HONEYCOMB_BATCH_SIZE", 50))
-
-ENABLE_POSEFLOW = (os.getenv("ENABLE_POSEFLOW", "yes") == "yes")
-
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+
+LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
+              '-35s %(lineno) -5d: %(message)s')
+LOGGER = logging.getLogger(__name__)
 
 MODEL_NAME = "COCO-17"
 
 # TIMEOUT = os.getenv('TIMEOUT', 3600)
-
-logger = get_logger()
 
 
 class Poser(object):
@@ -71,10 +72,10 @@ class Poser(object):
 
 
 def parse_pose_json(pose_json, video_data):
-    logger.info('processing: {}'.format(str(video_data)))
+    LOGGER.info('processing: {}'.format(str(video_data)))
     p = Poser()
     pose_model_id = p.pose_model_id
-    logger.info('pose_model_id: {}'.format(str(pose_model_id)))
+    LOGGER.info('pose_model_id: {}'.format(str(pose_model_id)))
     video_timestamp = datetime.strptime(video_data.get('timestamp'), ISO_FORMAT)
 
     bulk_args = {'pose2D': {'type': 'Pose2DInput', 'value': []}}
@@ -90,7 +91,7 @@ def parse_pose_json(pose_json, video_data):
 
         while joints:
             keypoints.append({'coordinates': [joints.pop(0), joints.pop(0)], 'quality': joints.pop(0)})
-        logger.info('keypoints count: {}'.format(str(len(keypoints))))
+        LOGGER.info('keypoints count: {}'.format(str(len(keypoints))))
 
         bulk_values.append({
             'timestamp': new_timestamp.strftime(ISO_FORMAT),
@@ -106,23 +107,19 @@ def parse_pose_json(pose_json, video_data):
         })
 
     bulk_args['pose2D']['value'] = bulk_values
-    # logger.debug(json.dumps(bulk_args))
-    # logger.debug(len(bulk_args['pose2D']['value']))
-
-    response = p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=BATCH_SIZE)
-    logger.info("honeycomb upload complete")
-    # logger.info(response)
+    p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=BATCH_SIZE)
+    LOGGER.info("honeycomb upload complete")
 
 
 def produce_poses(video_path):
     video_name = Path(video_path).resolve().stem
-    logger.info("video_name: {}".format(video_name))
+    LOGGER.info("video_name: {}".format(video_name))
 
     base_path = os.path.dirname(os.path.abspath(video_path))
-    logger.info("base_path: {}".format(base_path))
+    LOGGER.info("base_path: {}".format(base_path))
 
     outdir = os.path.join(base_path, video_name)
-    logger.info("outdir: {}".format(outdir))
+    LOGGER.info("outdir: {}".format(outdir))
 
     if output_json_exists(outdir):
         pose_json = get_json(outdir)
@@ -149,13 +146,13 @@ def produce_poses(video_path):
         outdir
     ]
     if not ENABLE_POSEFLOW:
-      cmd.remove('--pose_track')
-    logger.debug(cmd)
+        cmd.remove('--pose_track')
+    LOGGER.debug(cmd)
     subprocess.run(cmd)
     return get_json(outdir)
 
 
 def produce_poses_job(video_data):
     pose_json = produce_poses(video_data['path'])
-    logger.debug(pose_json)
+    # LOGGER.debug(pose_json)
     parse_pose_json(pose_json, video_data)

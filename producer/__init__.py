@@ -1,18 +1,17 @@
+import logging
 import os
-import sys
-from traceback import print_exc
 
 import click
 
-from producer.helpers import get_logger
 from producer.tasks import produce_poses
-from producer.qlib import connect_to_rabbit, close, start_consuming
-
+from producer.qlib import consume
 
 RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
 QUEUE_NAME = os.getenv("VIDEO_QUEUE_NAME", "queue-name")
 
-logger = get_logger()
+LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
+              '-35s %(lineno) -5d: %(message)s')
+LOGGER = logging.getLogger(__name__)
 
 
 @click.group()
@@ -25,33 +24,17 @@ def main(ctx):
 @click.pass_context
 @click.argument('videopath')
 def generate_pose(ctx, videopath):
-    logger.info('running generate_pose')
-    logger.info('videopath: {}'.format(videopath))
+    LOGGER.info('running generate_pose')
+    LOGGER.info('videopath: {}'.format(videopath))
     output = produce_poses(videopath)
     click.echo(output)
 
 
 @main.command()
 @click.pass_context
-@click.option('--rabbitmq', help='hostname for rabbitmq', required=False)
-@click.option('--queue', help='queue for rabbitmq', required=False)
-def process_video(ctx, rabbitmq=None, queue=None):
-    logger.info('running process_video')
-    host = rabbitmq if rabbitmq is not None else RABBIT_HOST
-    que = queue if queue is not None else QUEUE_NAME
-    logger.info("attempting to connect to {}".format(host))
-    channel = connect_to_rabbit(host, que)
-    click.echo(dir(channel))
-
-    try:
-        logger.info("start consuming")
-        start_consuming(channel, que)
-    except KeyboardInterrupt:
-        close(channel)
-    except Exception:
-        print_exc()
-        close(channel)
-        sys.exit(-1)
+def consume_queue(ctx):
+    LOGGER.info('running consume_queue')
+    consume()
 
 
 if __name__ == '__main__':

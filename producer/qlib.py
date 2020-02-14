@@ -46,7 +46,7 @@ class AsyncConsumer(object):
         self._consuming = False
         # In production, experiment with higher prefetch values
         # for higher consumer throughput
-        self._prefetch_count = 1
+        self._prefetch_count = s.PREFETCH_COUNT
 
     def connect(self):
         """This method connects to RabbitMQ, returning the connection handle.

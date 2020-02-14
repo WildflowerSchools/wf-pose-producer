@@ -21,7 +21,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: pose-producer
-          image: wildflowerschools/wf-deep-docker:pose-producer-v56
+          image: wildflowerschools/wf-deep-docker:pose-producer-v57
           imagePullPolicy: Always
           volumeMounts:
           - name: data
@@ -44,6 +44,8 @@ spec:
               value: "500"
             - name: ENABLE_POSEFLOW
               value: "no"
+            - name: PREFETCH_COUNT
+              value: "2"
       volumes:
         - name: data
           hostPath:

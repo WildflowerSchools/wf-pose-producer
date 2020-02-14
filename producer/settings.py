@@ -29,5 +29,6 @@ EXCHANGE = os.getenv("EXCHANGE", "message")
 EXCHANGE_TYPE = os.getenv("EXCHANGE_TYPE", "topic")
 QUEUE = os.getenv("VIDEO_QUEUE_NAME", "queue-name")
 ROUTING_KEY = os.getenv("ROUTING_KEY", QUEUE)
+PREFETCH_COUNT = int(os.getenv("PREFETCH_COUNT", 1))
 
 # TIMEOUT = os.getenv('TIMEOUT', 3600)

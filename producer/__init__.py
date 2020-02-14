@@ -1,17 +1,10 @@
-import logging
-import os
-
 import click
 
+from producer.helpers import get_logger
 from producer.tasks import produce_poses
 from producer.qlib import consume
 
-RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
-QUEUE_NAME = os.getenv("VIDEO_QUEUE_NAME", "queue-name")
-
-LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
-              '-35s %(lineno) -5d: %(message)s')
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger(__name__)
 
 
 @click.group()

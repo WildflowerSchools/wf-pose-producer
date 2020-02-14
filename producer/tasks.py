@@ -1,4 +1,3 @@
-import logging
 import os
 import subprocess
 from datetime import datetime, timedelta
@@ -6,30 +5,10 @@ from pathlib import Path
 
 from minimal_honeycomb import MinimalHoneycombClient
 
-from producer.helpers import get_json, output_json_exists
+from producer import settings as s
+from producer.helpers import get_json, get_logger, output_json_exists
 
-BATCH_SIZE = int(os.getenv("HONEYCOMB_BATCH_SIZE", 50))
-ENABLE_POSEFLOW = (os.getenv("ENABLE_POSEFLOW", "yes") == "yes")
-
-ENV = os.getenv('ENV', 'test')
-
-GPUS = os.getenv('GPUS', '0')
-
-HONEYCOMB_URL = os.getenv('HONEYCOMB_URL')
-HONEYCOMB_TOKEN_URI = os.getenv('HONEYCOMB_TOKEN_URI')
-HONEYCOMB_AUDIENCE = os.getenv('HONEYCOMB_AUDIENCE')
-HONEYCOMB_CLIENT_ID = os.getenv('HONEYCOMB_CLIENT_ID')
-HONEYCOMB_CLIENT_SECRET = os.getenv('HONEYCOMB_CLIENT_SECRET')
-
-ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
-
-LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
-              '-35s %(lineno) -5d: %(message)s')
-LOGGER = logging.getLogger(__name__)
-
-MODEL_NAME = "COCO-17"
-
-# TIMEOUT = os.getenv('TIMEOUT', 3600)
+LOGGER = get_logger(__name__)
 
 
 class Poser(object):
@@ -40,11 +19,11 @@ class Poser(object):
     def client(self):
         if self._client is None:
             self._client = MinimalHoneycombClient(
-                uri=HONEYCOMB_URL,
-                token_uri=HONEYCOMB_TOKEN_URI,
-                audience=HONEYCOMB_AUDIENCE,
-                client_id=HONEYCOMB_CLIENT_ID,
-                client_secret=HONEYCOMB_CLIENT_SECRET
+                uri=s.HONEYCOMB_URL,
+                token_uri=s.HONEYCOMB_TOKEN_URI,
+                audience=s.HONEYCOMB_AUDIENCE,
+                client_id=s.HONEYCOMB_CLIENT_ID,
+                client_secret=s.HONEYCOMB_CLIENT_SECRET
             )
         return self._client
 
@@ -54,7 +33,7 @@ class Poser(object):
             args = {
                 'model_name': {
                     'type': 'String',
-                    'value': MODEL_NAME
+                    'value': s.MODEL_NAME
                 }
             }
             response = self.client.request(
@@ -76,7 +55,7 @@ def parse_pose_json(pose_json, video_data):
     p = Poser()
     pose_model_id = p.pose_model_id
     LOGGER.info('pose_model_id: {}'.format(str(pose_model_id)))
-    video_timestamp = datetime.strptime(video_data.get('timestamp'), ISO_FORMAT)
+    video_timestamp = datetime.strptime(video_data.get('timestamp'), s.ISO_FORMAT)
 
     bulk_args = {'pose2D': {'type': 'Pose2DInput', 'value': []}}
     bulk_values = []
@@ -91,10 +70,10 @@ def parse_pose_json(pose_json, video_data):
 
         while joints:
             keypoints.append({'coordinates': [joints.pop(0), joints.pop(0)], 'quality': joints.pop(0)})
-        LOGGER.info('keypoints count: {}'.format(str(len(keypoints))))
+        # LOGGER.info('keypoints count: {}'.format(str(len(keypoints))))
 
         bulk_values.append({
-            'timestamp': new_timestamp.strftime(ISO_FORMAT),
+            'timestamp': new_timestamp.strftime(s.ISO_FORMAT),
             'camera': video_data.get('device_id'),
             'pose_model': pose_model_id,
             'keypoints': keypoints,
@@ -102,12 +81,12 @@ def parse_pose_json(pose_json, video_data):
             'track_label': str(meta.get("idx")),
             'tags': [
                 'original-timestamp: {}'.format(video_timestamp),
-                'env: {}'.format(ENV)
+                'env: {}'.format(s.ENV)
             ]
         })
 
     bulk_args['pose2D']['value'] = bulk_values
-    p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=BATCH_SIZE)
+    p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=s.BATCH_SIZE)
     LOGGER.info("honeycomb upload complete")
 
 
@@ -133,7 +112,7 @@ def produce_poses(video_path):
         "--checkpoint",
         "pretrained_models/fast_res50_256x192.pth",
         "--gpus",
-        str(GPUS),
+        str(s.GPUS),
         "--sp",
         "--posebatch",
         '200',
@@ -145,7 +124,7 @@ def produce_poses(video_path):
         "--outdir",
         outdir
     ]
-    if not ENABLE_POSEFLOW:
+    if not s.ENABLE_POSEFLOW:
         cmd.remove('--pose_track')
     LOGGER.debug(cmd)
     subprocess.run(cmd)

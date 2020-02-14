@@ -13,12 +13,18 @@ from producer.tasks import produce_poses_job
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
               '-35s %(lineno) -5d: %(message)s')
+LOG_LEVEL = os.getenv("LOG_LEVEL", "WARNING")
 LOGGER = logging.getLogger(__name__)
 
 RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
 RABBIT_PASSWORD = os.getenv("RABBIT_PASSWORD", "guest")
 RABBIT_PORT = os.getenv("RABBIT_PORT", "5672")
 RABBIT_USER = os.getenv("RABBIT_USER", "guest")
+
+EXCHANGE = os.getenv("EXCHANGE", "message")
+EXCHANGE_TYPE = os.getenv("EXCHANGE_TYPE", "topic")
+QUEUE = os.getenv("VIDEO_QUEUE_NAME", "queue-name")
+ROUTING_KEY = os.getenv("ROUTING_KEY", QUEUE)
 
 
 class AsyncConsumer(object):
@@ -34,10 +40,6 @@ class AsyncConsumer(object):
     commands that were issued and that should surface in the output as well.
 
     """
-    EXCHANGE = 'message'
-    EXCHANGE_TYPE = 'topic'
-    QUEUE = os.getenv("VIDEO_QUEUE_NAME", "queue-name")
-    ROUTING_KEY = 'pose-processing-queue'
 
     def __init__(self, amqp_url):
         """Create a new instance of the consumer class, passing in the AMQP
@@ -153,7 +155,7 @@ class AsyncConsumer(object):
         LOGGER.info('Channel opened')
         self._channel = channel
         self.add_on_channel_close_callback()
-        self.setup_exchange(self.EXCHANGE)
+        self.setup_exchange(EXCHANGE)
 
     def add_on_channel_close_callback(self):
         """This method tells pika to call the on_channel_closed method if
@@ -194,7 +196,7 @@ class AsyncConsumer(object):
         )
         self._channel.exchange_declare(
             exchange=exchange_name,
-            exchange_type=self.EXCHANGE_TYPE,
+            exchange_type=EXCHANGE_TYPE,
             callback=cb
         )
 
@@ -207,8 +209,8 @@ class AsyncConsumer(object):
 
         """
         LOGGER.info('Exchange declared: %s', userdata)
-        LOGGER.info('self.QUEUE: %s', self.QUEUE)
-        self.setup_queue(self.QUEUE)
+        LOGGER.info('self.QUEUE: %s', QUEUE)
+        self.setup_queue(QUEUE)
 
     def setup_queue(self, queue_name):
         """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
@@ -234,12 +236,12 @@ class AsyncConsumer(object):
 
         """
         queue_name = userdata
-        LOGGER.info('Binding %s to %s with %s', self.EXCHANGE, queue_name, self.ROUTING_KEY)
+        LOGGER.info('Binding %s to %s with %s', EXCHANGE, queue_name, ROUTING_KEY)
         cb = functools.partial(self.on_bindok, userdata=queue_name)
         self._channel.queue_bind(
             queue_name,
-            self.EXCHANGE,
-            routing_key=self.ROUTING_KEY,
+            EXCHANGE,
+            routing_key=ROUTING_KEY,
             callback=cb
         )
 
@@ -290,7 +292,7 @@ class AsyncConsumer(object):
         LOGGER.info('Issuing consumer related RPC commands')
         self.add_on_cancel_callback()
         self._consumer_tag = self._channel.basic_consume(
-            self.QUEUE,
+            QUEUE,
             self.on_message
         )
         self.was_consuming = True
@@ -450,7 +452,8 @@ class ReconnectingAsyncConsumer(object):
 
 
 def consume():
-    logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
+    LOGGER.setLevel(LOG_LEVEL)
+    logging.basicConfig(format=LOG_FORMAT)
     amqp_url = 'amqp://{user}:{password}@{host}:{port}'.format(
         user=RABBIT_USER,
         password=RABBIT_PASSWORD,

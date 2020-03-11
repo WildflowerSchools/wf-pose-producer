@@ -76,6 +76,8 @@ def parse_pose_json(pose_json, video_data):
             'timestamp': new_timestamp.strftime(s.ISO_FORMAT),
             'camera': video_data.get('device_id'),
             'pose_model': pose_model_id,
+            'source': video_data['inference_execution_id'],
+            'source_type': 'INFERRED',
             'keypoints': keypoints,
             'quality': meta.get("score"),
             'track_label': str(meta.get("idx")),
@@ -132,6 +134,6 @@ def produce_poses(video_path):
 
 
 def produce_poses_job(video_data):
+    LOGGER.info(f"starting job for {video_data['inference_execution_id']} inference execution")
     pose_json = produce_poses(video_data['path'])
-    # LOGGER.debug(pose_json)
     parse_pose_json(pose_json, video_data)

@@ -6,9 +6,12 @@ from producer.settings import LOG_FORMAT, LOG_LEVEL
 
 
 def get_json(outdir):
-    with open(os.path.join(outdir, 'alphapose-results.json')) as fh:
-        ap_json = json.load(fh)
-    return ap_json
+    try:
+        with open(os.path.join(outdir, 'alphapose-results.json')) as fh:
+            return json.load(fh)
+    except:
+        pass
+    return None
 
 
 def output_json_exists(outdir):

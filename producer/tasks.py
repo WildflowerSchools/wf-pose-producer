@@ -62,30 +62,31 @@ def parse_pose_json(pose_json, video_data):
     request_name = 'createPose2D'
     return_object = ['pose_id']
 
-    for meta in pose_json:
-        sec = int(meta.get("image_id").split('.')[0], 10)
+    for image_id in pose_json.keys():
+        sec = int(image_id.split('.')[0], 10)
         new_timestamp = video_timestamp + timedelta(seconds=sec * 0.1)
-        keypoints = []
-        joints = meta['keypoints']
+        image = pose_json[image_id]
+        for body in image['bodies']:
+            keypoints = []
+            joints = body['joints']
 
-        while joints:
-            keypoints.append({'coordinates': [joints.pop(0), joints.pop(0)], 'quality': joints.pop(0)})
-        # LOGGER.info('keypoints count: {}'.format(str(len(keypoints))))
+            while joints:
+                keypoints.append({'coordinates': [joints.pop(0), joints.pop(0)], 'quality': joints.pop(0)})
 
-        bulk_values.append({
-            'timestamp': new_timestamp.strftime(s.ISO_FORMAT),
-            'camera': video_data.get('device_id'),
-            'pose_model': pose_model_id,
-            'source': video_data['inference_execution_id'],
-            'source_type': 'INFERRED',
-            'keypoints': keypoints,
-            'quality': meta.get("score"),
-            'track_label': str(meta.get("idx")),
-            'tags': [
-                'original-timestamp: {}'.format(video_timestamp),
-                'env: {}'.format(s.ENV)
-            ]
-        })
+            bulk_values.append({
+                'timestamp': new_timestamp.strftime(s.ISO_FORMAT),
+                'camera': video_data.get('device_id'),
+                'pose_model': pose_model_id,
+                'source': video_data['inference_execution_id'],
+                'source_type': 'INFERRED',
+                'keypoints': keypoints,
+                # 'quality': meta.get("score"),
+                # 'track_label': str(meta.get("idx")),
+                'tags': [
+                    'original-timestamp: {}'.format(video_timestamp),
+                    'env: {}'.format(s.ENV)
+                ]
+            })
 
     bulk_args['pose2D']['value'] = bulk_values
     p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=s.BATCH_SIZE)
@@ -104,7 +105,8 @@ def produce_poses(video_path):
 
     if output_json_exists(outdir):
         pose_json = get_json(outdir)
-        if "idx" in pose_json[0] and pose_json[0]["idx"] and "idx" in pose_json[-1] and pose_json[-1]["idx"]:
+        # if s.ENABLE_POSEFLOW and "idx" in pose_json[0] and pose_json[0]["idx"] and "idx" in pose_json[-1] and pose_json[-1]["idx"]:
+        if pose_json:
             return pose_json
     cmd = [
         "python3",
@@ -137,3 +139,4 @@ def produce_poses_job(video_data):
     LOGGER.info(f"starting job for {video_data['inference_execution_id']} inference execution")
     pose_json = produce_poses(video_data['path'])
     parse_pose_json(pose_json, video_data)
+

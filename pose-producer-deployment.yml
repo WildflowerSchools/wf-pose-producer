@@ -21,7 +21,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: pose-producer
-          image: wildflowerschools/wf-deep-docker:pose-producer-v58
+          image: wildflowerschools/wf-deep-docker:pose-producer-v65
           imagePullPolicy: Always
           volumeMounts:
           - name: data

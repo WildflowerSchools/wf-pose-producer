@@ -323,8 +323,12 @@ class AsyncConsumer(object):
                     basic_deliver.delivery_tag, properties.app_id, body)
         msg = json.loads(body)
         LOGGER.info(json.dumps(msg))
-        produce_poses_job(msg)
         self.acknowledge_message(basic_deliver.delivery_tag)
+        try:
+            produce_poses_job(msg)
+        except Exception as e:
+            LOGGER.error(str(e))
+
 
     def acknowledge_message(self, delivery_tag):
         """Acknowledge the message delivery from RabbitMQ by sending a

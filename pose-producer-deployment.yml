@@ -21,7 +21,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: pose-producer
-          image: wildflowerschools/wf-deep-docker:pose-producer-v66
+          image: wildflowerschools/wf-deep-docker:pose-producer-v76
           imagePullPolicy: Always
           volumeMounts:
           - name: data
@@ -30,6 +30,8 @@ spec:
             - secretRef:
                 name: gpu-client-secrets
           env:
+            - name: ALPHA_POSE_POSEFLOW
+              value: "false"
             - name: RABBIT_HOST
               value: rabbitmq-video-queue.inference.svc.cluster.local
             - name: VIDEO_QUEUE_NAME
@@ -37,13 +39,11 @@ spec:
             - name: LOG_LEVEL
               value: DEBUG
             - name: GPUS
-              value: "0,1"
+              value: "0"
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: HONEYCOMB_BATCH_SIZE
               value: "500"
-            - name: ENABLE_POSEFLOW
-              value: "no"
             - name: PREFETCH_COUNT
               value: "2"
       volumes:

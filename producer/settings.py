@@ -3,8 +3,7 @@ import os
 
 ENV = os.getenv('ENV', 'test')
 
-ENABLE_POSEFLOW = (os.getenv("ENABLE_POSEFLOW", "yes") == "yes")
-GPUS = os.getenv('GPUS', '0')
+GPU = os.getenv('GPU', None)
 
 BATCH_SIZE = int(os.getenv("HONEYCOMB_BATCH_SIZE", 50))
 HONEYCOMB_URL = os.getenv('HONEYCOMB_URL')
@@ -32,3 +31,8 @@ ROUTING_KEY = os.getenv("ROUTING_KEY", QUEUE)
 PREFETCH_COUNT = int(os.getenv("PREFETCH_COUNT", 1))
 
 # TIMEOUT = os.getenv('TIMEOUT', 3600)
+
+ALPHA_POSE_POSEFLOW = os.getenv("ALPHA_POSE_POSEFLOW", "false") == "true"
+MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", 4))
+
+DATA_PROCESS_DIRECTORY = os.getenv("DATA_PROCESS_DIRECTORY", "/data")

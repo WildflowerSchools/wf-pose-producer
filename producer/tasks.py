@@ -1,14 +1,18 @@
+from glob import glob
+import json
+import logging
 import os
-import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
+# import tracemalloc
 
 from minimal_honeycomb import MinimalHoneycombClient
 
 from producer import settings as s
-from producer.helpers import get_json, get_logger, output_json_exists
-
-LOGGER = get_logger(__name__)
+from producer.helpers import get_json, output_json_exists
+from producer.honeycomb import create_inference_execution
+from producer.alpha import AlphaPoser
 
 
 class Poser(object):
@@ -50,12 +54,12 @@ class Poser(object):
             return response['data'][0]['pose_model_id']
 
 
-def parse_pose_json(pose_json, video_data):
-    LOGGER.info('processing: {}'.format(str(video_data)))
+def parse_alphapose_json(pose_json, path, device_id, timestamp, inference_execution_id):
+    logging.info('processing: {}'.format(str(path)))
     p = Poser()
     pose_model_id = p.pose_model_id
-    LOGGER.info('pose_model_id: {}'.format(str(pose_model_id)))
-    video_timestamp = datetime.strptime(video_data.get('timestamp'), s.ISO_FORMAT)
+    logging.info('pose_model_id: {}'.format(str(pose_model_id)))
+    video_timestamp = datetime.strptime(timestamp, s.ISO_FORMAT)
 
     bulk_args = {'pose2D': {'type': 'Pose2DInput', 'value': []}}
     bulk_values = []
@@ -69,74 +73,166 @@ def parse_pose_json(pose_json, video_data):
         for body in image['bodies']:
             keypoints = []
             joints = body['joints']
+            score = body.get("score")
 
             while joints:
                 keypoints.append({'coordinates': [joints.pop(0), joints.pop(0)], 'quality': joints.pop(0)})
 
-            bulk_values.append({
+            payload = {
                 'timestamp': new_timestamp.strftime(s.ISO_FORMAT),
-                'camera': video_data.get('device_id'),
+                'camera': device_id,
                 'pose_model': pose_model_id,
-                'source': video_data['inference_execution_id'],
+                'source': inference_execution_id,
                 'source_type': 'INFERRED',
                 'keypoints': keypoints,
-                # 'quality': meta.get("score"),
-                # 'track_label': str(meta.get("idx")),
+                'track_label': str(body.get("idx", "")),
                 'tags': [
                     'original-timestamp: {}'.format(video_timestamp),
                     'env: {}'.format(s.ENV)
                 ]
-            })
+            }
+            if score is not None:
+                payload['quality'] = score
+            bulk_values.append(payload)
 
     bulk_args['pose2D']['value'] = bulk_values
     p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=s.BATCH_SIZE)
-    LOGGER.info("honeycomb upload complete")
+    logging.info("honeycomb upload complete")
 
+def parse_openpose_json(video_path, device_id, timestamp, inference_execution_id):
+    logging.info('processing: {}'.format(str(video_path)))
+    p = Poser()
+    pose_model_id = p.pose_model_id
+    logging.info('pose_model_id: {}'.format(str(pose_model_id)))
+    video_timestamp = datetime.strptime(timestamp, s.ISO_FORMAT)
 
-def produce_poses(video_path):
+    bulk_args = {'pose2D': {'type': 'Pose2DInput', 'value': []}}
+    bulk_values = []
+    request_name = 'createPose2D'
+    return_object = ['pose_id']
+
     video_name = Path(video_path).resolve().stem
-    LOGGER.info("video_name: {}".format(video_name))
-
     base_path = os.path.dirname(os.path.abspath(video_path))
-    LOGGER.info("base_path: {}".format(base_path))
+    prefix = os.path.join(base_path, video_name)
+    files = glob(f"{prefix}*.json")
+    for file in files:
+        sec = int(file[-20:-15])
+        new_timestamp = video_timestamp + timedelta(seconds=sec * 0.1)
+        with open(file, 'r') as fp:
+            data = json.load(fp)
+            for person in data.get("people", []):
+                keypoints_raw = person.get("pose_keypoints_2d")
+                keypoints = []
 
-    outdir = os.path.join(base_path, video_name)
-    LOGGER.info("outdir: {}".format(outdir))
+                while keypoints_raw:
+                    keypoints.append({'coordinates': [keypoints_raw.pop(0), keypoints_raw.pop(0)], 'quality': keypoints_raw.pop(0)})
 
+                payload = {
+                    'timestamp': new_timestamp.strftime(s.ISO_FORMAT),
+                    'camera': device_id,
+                    'pose_model': pose_model_id,
+                    'source': inference_execution_id,
+                    'source_type': 'INFERRED',
+                    'keypoints': keypoints,
+                    'track_label': str(person.get("person_id", "")),
+                    'tags': [
+                        'original-timestamp: {}'.format(video_timestamp),
+                        'env: {}'.format(s.ENV)
+                    ]
+                }
+                bulk_values.append(payload)
+    bulk_args['pose2D']['value'] = bulk_values
+    p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=s.BATCH_SIZE)
+    logging.info("honeycomb upload complete")
+
+
+def out_dir_from_path(video_path):
+    video_name = Path(video_path).resolve().stem
+    base_path = os.path.dirname(os.path.abspath(video_path))
+    return os.path.join(base_path, video_name)
+
+
+def read_paths(path, slot):
+    with open(f"{path[:-4]}{slot}.json", 'r') as reader:
+        return json.load(reader)
+
+
+def execute_manifest(path, slot):
+    with open(path, 'r') as manipedi:
+        data = json.load(manipedi)
+    assignment_id = data.get("assignment_id")
+    paths = read_paths(path, slot)
+
+    if len(paths):
+        inference_execution_id = data.get("inference_execution_id")
+        if inference_execution_id is None:
+            inference_execution_id = create_inference_execution(assignment_id, data.get("start"), data.get("end"))
+            data['inference_execution_id'] = inference_execution_id
+            with open(path, 'w') as fp:
+                json.dump(data, fp)
+                fp.flush()
+        for obj in paths:
+            if isinstance(obj, str):
+                obj = json.loads(obj)
+            video_path = obj.get("video")
+            outdir = out_dir_from_path(video_path)
+            if output_json_exists(outdir):
+                logging.info("output exists, skipping")
+            else:
+                logging.info("outdir: {}".format(outdir))
+                poser = AlphaPoser(
+                            "pretrained_models/256x192_res50_lr1e-3_1x.yaml",
+                            "pretrained_models/fast_res50_256x192.pth",
+                            gpu=s.GPU,
+                            single_process=True,
+                            output_format="cmu",
+                            pose_track=s.ALPHA_POSE_POSEFLOW
+                        )
+                poser.process_video(video_path, outdir)
+
+
+def handle_video(video_path):
+    outdir = out_dir_from_path(video_path)
     if output_json_exists(outdir):
-        pose_json = get_json(outdir)
-        # if s.ENABLE_POSEFLOW and "idx" in pose_json[0] and pose_json[0]["idx"] and "idx" in pose_json[-1] and pose_json[-1]["idx"]:
-        if pose_json:
-            return pose_json
-    cmd = [
-        "python3",
-        "scripts/demo_inference.py",
-        "--cfg",
-        "pretrained_models/256x192_res50_lr1e-3_1x.yaml",
-        "--checkpoint",
-        "pretrained_models/fast_res50_256x192.pth",
-        "--gpus",
-        str(s.GPUS),
-        "--sp",
-        "--posebatch",
-        '200',
-        "--detbatch",
-        '10',
-        "--pose_track",
-        "--video",
-        video_path,
-        "--outdir",
-        outdir
-    ]
-    if not s.ENABLE_POSEFLOW:
-        cmd.remove('--pose_track')
-    LOGGER.debug(cmd)
-    subprocess.run(cmd)
-    return get_json(outdir)
+        logging.info("output exists, skipping")
+    else:
+        logging.info("outdir: {}".format(outdir))
+        poser = AlphaPoser(
+                    "pretrained_models/256x192_res50_lr1e-3_1x.yaml",
+                    "pretrained_models/fast_res50_256x192.pth",
+                    gpu=s.GPU,
+                    single_process=True,
+                    output_format="cmu",
+                    pose_track=s.ALPHA_POSE_POSEFLOW
+                )
+        poser.process_video(video_path, outdir)
 
 
-def produce_poses_job(video_data):
-    LOGGER.info(f"starting job for {video_data['inference_execution_id']} inference execution")
-    pose_json = produce_poses(video_data['path'])
-    parse_pose_json(pose_json, video_data)
+def upload_manifest(path, slot, pose_model):
+    with open(path, 'r') as manipedi:
+        data = json.load(manipedi)
+    assignment_id = data.get("assignment_id")
+    device_id = data.get("device_id")
+    paths = read_paths(path, slot)
 
+    if len(paths):
+        inference_execution_id = data.get("inference_execution_id")
+        if inference_execution_id is None:
+            inference_execution_id = create_inference_execution(assignment_id, data.get("start"), data.get("end"))
+            data['inference_execution_id'] = inference_execution_id
+            with open(path, 'w') as fp:
+                json.dump(data, fp)
+                fp.flush()
+        if pose_model == "alphapose_coco18":
+            for obj in paths:
+                path = obj.get("video")
+                timestamp = obj.get("timestamp")
+                outdir = out_dir_from_path(path)
+                pose_json = get_json(outdir)
+                # TODO - push data_id into the inferenceExecution sources
+                parse_alphapose_json(pose_json, path, device_id, timestamp, inference_execution_id)
+        if pose_model == "openpose_body_25":
+            for obj in paths:
+                path = obj.get("video")
+                timestamp = obj.get("timestamp")
+                parse_openpose_json(path, device_id, timestamp, inference_execution_id)

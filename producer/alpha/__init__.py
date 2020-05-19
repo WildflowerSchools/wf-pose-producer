@@ -71,12 +71,10 @@ class AlphaPoser:
             os.makedirs(output_path)
         self.outputpath = output_path
         det_loader = DetectionLoader(input_path, self.detector_instance, self.config, self, batchSize=self.detbatch, mode="video").start()
-
         # Init data writer
         writer = DataWriter(self.config, self, save_video=False, queueSize=self.qsize).start()
 
         data_len = det_loader.length
-
         try:
             logging.info("inferring poses....")
             for i in range(data_len):

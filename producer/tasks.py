@@ -164,8 +164,6 @@ def execute_manifest(path, slot):
     paths = read_paths(path, slot)
 
     if len(paths):
-        # tracemalloc.start()
-        poser = AlphaPoser("pretrained_models/256x192_res50_lr1e-3_1x.yaml", "pretrained_models/fast_res50_256x192.pth", gpu=s.GPU, single_process=True, output_format="cmu", pose_track=s.ALPHA_POSE_POSEFLOW)
         inference_execution_id = data.get("inference_execution_id")
         if inference_execution_id is None:
             inference_execution_id = create_inference_execution(assignment_id, data.get("start"), data.get("end"))
@@ -178,8 +176,36 @@ def execute_manifest(path, slot):
                 obj = json.loads(obj)
             video_path = obj.get("video")
             outdir = out_dir_from_path(video_path)
-            logging.info("outdir: {}".format(outdir))
-            poser.process_video(video_path, outdir)
+            if output_json_exists(outdir):
+                logging.info("output exists, skipping")
+            else:
+                logging.info("outdir: {}".format(outdir))
+                poser = AlphaPoser(
+                            "pretrained_models/256x192_res50_lr1e-3_1x.yaml",
+                            "pretrained_models/fast_res50_256x192.pth",
+                            gpu=s.GPU,
+                            single_process=True,
+                            output_format="cmu",
+                            pose_track=s.ALPHA_POSE_POSEFLOW
+                        )
+                poser.process_video(video_path, outdir)
+
+
+def handle_video(video_path):
+    outdir = out_dir_from_path(video_path)
+    if output_json_exists(outdir):
+        logging.info("output exists, skipping")
+    else:
+        logging.info("outdir: {}".format(outdir))
+        poser = AlphaPoser(
+                    "pretrained_models/256x192_res50_lr1e-3_1x.yaml",
+                    "pretrained_models/fast_res50_256x192.pth",
+                    gpu=s.GPU,
+                    single_process=True,
+                    output_format="cmu",
+                    pose_track=s.ALPHA_POSE_POSEFLOW
+                )
+        poser.process_video(video_path, outdir)
 
 
 def upload_manifest(path, slot, pose_model):
@@ -191,6 +217,12 @@ def upload_manifest(path, slot, pose_model):
 
     if len(paths):
         inference_execution_id = data.get("inference_execution_id")
+        if inference_execution_id is None:
+            inference_execution_id = create_inference_execution(assignment_id, data.get("start"), data.get("end"))
+            data['inference_execution_id'] = inference_execution_id
+            with open(path, 'w') as fp:
+                json.dump(data, fp)
+                fp.flush()
         if pose_model == "alphapose_coco18":
             for obj in paths:
                 path = obj.get("video")

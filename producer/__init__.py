@@ -7,7 +7,6 @@ import re
 
 import click
 
-from producer.tasks import execute_manifest, upload_manifest
 from producer import settings as s
 
 LOGGER = logging.getLogger()
@@ -43,6 +42,7 @@ def main(ctx):
 @click.argument('duration')
 @click.argument('slot')
 def poses(ctx, environment_id, assignment_id, start, duration, slot):
+    from producer.tasks import execute_manifest
     LOGGER.info('processing a manifest')
     ppath = os.path.join(s.DATA_PROCESS_DIRECTORY, environment_id, assignment_id)
     hasher = hashlib.sha1()
@@ -62,6 +62,27 @@ def poses(ctx, environment_id, assignment_id, start, duration, slot):
 
 @main.command()
 @click.pass_context
+@click.argument('video_path')
+def video(ctx, video_path):
+    from producer.tasks import handle_video
+    LOGGER.info('processing a video')
+    handle_video(video_path)
+
+
+@main.command()
+@click.pass_context
+@click.argument('start')
+@click.argument('duration')
+def hash(ctx, start, duration):
+    LOGGER.info('generating a hash')
+    hasher = hashlib.sha1()
+    hasher.update(start.encode('utf8'))
+    hasher.update((datetime.strptime(start, ISO_FORMAT) + parse_duration(duration)).strftime(ISO_FORMAT).encode('utf8'))
+    print(hasher.hexdigest())
+
+
+@main.command()
+@click.pass_context
 @click.argument('environment_id')
 @click.argument('assignment_id')
 @click.argument('start')
@@ -69,6 +90,7 @@ def poses(ctx, environment_id, assignment_id, start, duration, slot):
 @click.argument('slot')
 @click.argument('pose_model')
 def upload_poses(ctx, environment_id, assignment_id, start, duration, slot, pose_model="alphapose_coco18"):
+    from producer.tasks import upload_manifest
     LOGGER.info('processing a manifest')
     ppath = os.path.join(s.DATA_PROCESS_DIRECTORY, environment_id, assignment_id)
     hasher = hashlib.sha1()

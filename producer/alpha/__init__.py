@@ -23,7 +23,7 @@ from producer.helpers import output_json_exists
 class AlphaPoser:
 
     def __init__(self, config_path, checkpoint, single_process=False, detbatch=5, posebatch=80, gpu=None,
-                 detector="tracker", qsize=1024, output_format="coco", output_indexed=False, pose_track=False):
+                 detector="yolo", qsize=1024, output_format="coco", output_indexed=False, pose_track=False):
         #========================
         self.sp = self._single_process = single_process
         if not self._single_process:
@@ -45,7 +45,7 @@ class AlphaPoser:
         if torch.cuda.device_count() < 1:
             self.gpus = []
         elif gpu is not None:
-            self.gpus = [gpu]
+            self.gpus = [int(gpu)]
         else:
             self.gpus = [gpu_init(best_gpu_metric="mem")]
         if len(self.gpus):

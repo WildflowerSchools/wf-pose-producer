@@ -41,7 +41,7 @@ def main(ctx):
 @click.argument('start')
 @click.argument('duration')
 @click.argument('slot')
-def poses(ctx, environment_id, assignment_id, start, duration, slot):
+def poses(ctx, environment_id, assignment_id, start, duration, slot, inference_model="alphapose", inference_model_version="v1"):
     from producer.tasks import execute_manifest
     LOGGER.info('processing a manifest')
     ppath = os.path.join(s.DATA_PROCESS_DIRECTORY, environment_id, assignment_id)
@@ -53,7 +53,7 @@ def poses(ctx, environment_id, assignment_id, start, duration, slot):
     attempts = 0
     while attempts < s.MAX_ATTEMPTS:
         try:
-            execute_manifest(state_path, slot)
+            execute_manifest(state_path, slot, inference_model, inference_model_version)
             return
         except Exception as err:
             LOGGER.exception("inference run failed")
@@ -89,7 +89,8 @@ def hash(ctx, start, duration):
 @click.argument('duration')
 @click.argument('slot')
 @click.argument('pose_model')
-def upload_poses(ctx, environment_id, assignment_id, start, duration, slot, pose_model="alphapose_coco18"):
+@click.argument('inference_model')
+def upload_poses(ctx, environment_id, assignment_id, start, duration, slot, pose_model="alphapose_coco18", inference_model="alphapose", inference_model_version="v1"):
     from producer.tasks import upload_manifest
     LOGGER.info('processing a manifest')
     ppath = os.path.join(s.DATA_PROCESS_DIRECTORY, environment_id, assignment_id)
@@ -98,7 +99,7 @@ def upload_poses(ctx, environment_id, assignment_id, start, duration, slot, pose
     hasher.update((datetime.strptime(start, ISO_FORMAT) + parse_duration(duration)).strftime(ISO_FORMAT).encode('utf8'))
     state_id = hasher.hexdigest()
     state_path = os.path.join(ppath, f"{state_id}.json")
-    upload_manifest(state_path, slot, pose_model)
+    upload_manifest(state_path, slot, pose_model, inference_model, inference_model_version)
 
 
 if __name__ == '__main__':

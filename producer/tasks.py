@@ -157,7 +157,7 @@ def read_paths(path, slot):
         return json.load(reader)
 
 
-def execute_manifest(path, slot):
+def execute_manifest(path, slot, model, version):
     with open(path, 'r') as manipedi:
         data = json.load(manipedi)
     assignment_id = data.get("assignment_id")
@@ -166,7 +166,7 @@ def execute_manifest(path, slot):
     if len(paths):
         inference_execution_id = data.get("inference_execution_id")
         if inference_execution_id is None:
-            inference_execution_id = create_inference_execution(assignment_id, data.get("start"), data.get("end"))
+            inference_execution_id = create_inference_execution(assignment_id, data.get("start"), data.get("end"), model=model, version=version)
             data['inference_execution_id'] = inference_execution_id
             with open(path, 'w') as fp:
                 json.dump(data, fp)
@@ -208,7 +208,7 @@ def handle_video(video_path):
         poser.process_video(video_path, outdir)
 
 
-def upload_manifest(path, slot, pose_model):
+def upload_manifest(path, slot, pose_model, model, version):
     with open(path, 'r') as manipedi:
         data = json.load(manipedi)
     assignment_id = data.get("assignment_id")
@@ -218,7 +218,7 @@ def upload_manifest(path, slot, pose_model):
     if len(paths):
         inference_execution_id = data.get("inference_execution_id")
         if inference_execution_id is None:
-            inference_execution_id = create_inference_execution(assignment_id, data.get("start"), data.get("end"))
+            inference_execution_id = create_inference_execution(assignment_id, data.get("start"), data.get("end"), model=model, version=version)
             data['inference_execution_id'] = inference_execution_id
             with open(path, 'w') as fp:
                 json.dump(data, fp)

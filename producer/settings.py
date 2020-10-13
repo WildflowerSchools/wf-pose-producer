@@ -33,6 +33,9 @@ PREFETCH_COUNT = int(os.getenv("PREFETCH_COUNT", 1))
 # TIMEOUT = os.getenv('TIMEOUT', 3600)
 
 ALPHA_POSE_POSEFLOW = os.getenv("ALPHA_POSE_POSEFLOW", "false") == "true"
+ALPHA_POSE_POSEFLOW = os.getenv("ALPHA_POSE_CHECKPOINT", "pretrained_models/256x192_res50_lr1e-3_1x.yaml")
+ALPHA_POSE_POSEFLOW = os.getenv("ALPHA_POSE_CONFIG", "pretrained_models/fast_res50_256x192.pth")
+
 MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", 4))
 
 DATA_PROCESS_DIRECTORY = os.getenv("DATA_PROCESS_DIRECTORY", "/data")

@@ -52,8 +52,8 @@ class AlphaPoser:
             self.device = torch.device("cuda:" + str(self.gpus[0]))
         else:
             self.device = torch.device("cpu")
-        self.detbatch = detbatch  #  * len(self.gpus)
-        self.posebatch = posebatch  #  * len(self.gpus)
+        self.detbatch = detbatch
+        self.posebatch = posebatch
         self.tracking = (detector == 'tracker')
         self.detector = detector
         self.pose_model =  builder.build_sppe(self.config.MODEL, preset_cfg=self.config.DATA_PRESET)

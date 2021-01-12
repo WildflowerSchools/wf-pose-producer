@@ -4,7 +4,6 @@ import platform
 import sys
 import time
 
-from gpu_utils import gpu_init
 import numpy as np
 import torch
 
@@ -13,7 +12,6 @@ from alphapose.models import builder
 from alphapose.utils.config import update_config
 from alphapose.utils.detector import DetectionLoader
 from alphapose.utils.pPose_nms import write_json
-from alphapose.utils.transforms import flip, flip_heatmap
 from alphapose.utils.vis import getTime
 from alphapose.utils.writer import DataWriter
 
@@ -46,8 +44,6 @@ class AlphaPoser:
             self.gpus = []
         elif gpu is not None:
             self.gpus = [int(gpu)]
-        else:
-            self.gpus = [gpu_init(best_gpu_metric="mem")]
         if len(self.gpus):
             self.device = torch.device("cuda:" + str(self.gpus[0]))
         else:

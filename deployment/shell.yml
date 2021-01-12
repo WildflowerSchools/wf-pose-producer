@@ -1,0 +1,21 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: python-shell
+  namespace: inference
+spec:
+  restartPolicy: OnFailure
+  containers:
+    - name: python-shell
+      image: python:3.8-buster
+      command: [ "/bin/bash", "-c", "--" ]
+      args: [ "while true; do sleep 30; done;" ]
+      volumeMounts:
+      - name: data
+        mountPath: /data
+  volumes:
+    - name: data
+      hostPath:
+        path: /data
+        type: Directory

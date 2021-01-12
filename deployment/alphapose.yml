@@ -1,0 +1,36 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pose-producer
+  namespace: inference
+  labels:
+    name: pose-producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: pose-producer
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        name: pose-producer
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: pose-producer
+          image: wildflowerschools/wf-deep-docker:alphapose-producer-worker-v1
+          imagePullPolicy: Always
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          command: ["python", "-m", "producer.theon", "cuda0"]
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+            type: Directory

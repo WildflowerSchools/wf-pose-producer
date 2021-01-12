@@ -16,9 +16,24 @@ spec:
       labels:
         name: pose-producer
     spec:
-      nodeSelector:
-        gpu-type: RTX
+      # nodeSelector:
+      #   gpu-type: RTX
       restartPolicy: Always
+      initContainers:
+        - name: agency
+          image: wildflowerschools/wf-deep-docker:model-agency-v1
+          command: ["python", "-m", "agency", "bundle-download", "--name", "YOLOV4_WF_RES152_256x192_WF_YOLOV4", "--version", "v2"]
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+          env:
+            - name: AGENCY_BUCKET_NAME
+              value: "wildflower-tech-model-zoo"
+            - name: AGENCY_CACHE_DIR
+              value: /data/cache
       containers:
         - name: pose-producer
           image: wildflowerschools/wf-deep-docker:pose-producer-v76
@@ -30,6 +45,10 @@ spec:
             - secretRef:
                 name: gpu-client-secrets
           env:
+            - name: ALPHAPOSE_CONFIG
+              value: /data/cache/versions/YOLOV4_WF_RES152_256x192_WF_YOLOV4/v2/alphapose-wf_res152_256x192.0.2.yolov4.yaml
+            - name: ALPHAPOSE_CHECKPOINT
+              value: /data/cache/versions/YOLOV4_WF_RES152_256x192_WF_YOLOV4/v2/alphapose-wf_res152_256x192.0.2.yolov4.pth
             - name: ALPHA_POSE_POSEFLOW
               value: "false"
             - name: RABBIT_HOST

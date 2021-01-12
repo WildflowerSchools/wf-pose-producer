@@ -50,6 +50,7 @@ def poses(ctx, environment_id, assignment_id, start, duration, slot, inference_m
     hasher.update((datetime.strptime(start, ISO_FORMAT) + parse_duration(duration)).strftime(ISO_FORMAT).encode('utf8'))
     state_id = hasher.hexdigest()
     state_path = os.path.join(ppath, f"{state_id}.json")
+    LOGGER.info(state_path)
     attempts = 0
     while attempts < s.MAX_ATTEMPTS:
         try:
@@ -90,6 +91,7 @@ def hash(ctx, start, duration):
 @click.argument('slot')
 @click.argument('pose_model')
 @click.argument('inference_model')
+@click.argument('inference_model_version')
 def upload_poses(ctx, environment_id, assignment_id, start, duration, slot, pose_model="alphapose_coco18", inference_model="alphapose", inference_model_version="v1"):
     from producer.tasks import upload_manifest
     LOGGER.info('processing a manifest')

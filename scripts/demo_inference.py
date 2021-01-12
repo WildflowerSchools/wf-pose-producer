@@ -70,8 +70,11 @@ parser.add_argument('--save_video', dest='save_video',
                     help='whether to save rendered video', default=False, action='store_true')
 parser.add_argument('--vis_fast', dest='vis_fast',
                     help='use fast rendering', action='store_true', default=False)
+"""----------------------------- Tracking options -----------------------------"""
+parser.add_argument('--pose_flow', dest='pose_flow',
+                    help='track humans in video with PoseFlow', action='store_true', default=False)
 parser.add_argument('--pose_track', dest='pose_track',
-                    help='track humans in video', action='store_true', default=False)
+                    help='track humans in video with reid', action='store_true', default=False)
 
 args = parser.parse_args()
 cfg = update_config(args.cfg)
@@ -88,7 +91,7 @@ print(args.device)
 print("=" * 80)
 args.detbatch = args.detbatch * len(args.gpus)
 args.posebatch = args.posebatch * len(args.gpus)
-args.tracking = (args.detector == 'tracker')
+args.tracking = args.pose_track or args.pose_flow or args.detector=='tracker'
 
 if not args.sp:
     torch.multiprocessing.set_start_method('forkserver', force=True)

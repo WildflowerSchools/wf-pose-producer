@@ -54,8 +54,11 @@ class Poser(object):
             return response['data'][0]['pose_model_id']
 
 
-def parse_alphapose_json(pose_json, path, device_id, timestamp, inference_execution_id):
+def parse_alphapose_json(num_of_keypoints, pose_json, path, device_id, timestamp, inference_execution_id):
     logging.info('processing: {}'.format(str(path)))
+    if len(pose_json) == 0:
+        logging.info('no poses'.format(str(path)))
+        return
     p = Poser()
     pose_model_id = p.pose_model_id
     logging.info('pose_model_id: {}'.format(str(pose_model_id)))
@@ -66,18 +69,44 @@ def parse_alphapose_json(pose_json, path, device_id, timestamp, inference_execut
     request_name = 'createPose2D'
     return_object = ['pose_id']
 
-    for image_id in pose_json.keys():
-        sec = int(image_id.split('.')[0], 10)
-        new_timestamp = video_timestamp + timedelta(seconds=sec * 0.1)
-        image = pose_json[image_id]
-        for body in image['bodies']:
-            keypoints = []
-            joints = body['joints']
-            score = body.get("score")
+    if num_of_keypoints == 18:
+        for image_id in pose_json.keys():
+            sec = int(image_id.split('.')[0], 10)
+            new_timestamp = video_timestamp + timedelta(seconds=sec * 0.1)
+            image = pose_json[image_id]
+            for body in image['bodies']:
+                keypoints = []
+                joints = body['joints']
+                score = body.get("score")
+                while joints:
+                    keypoints.append({'coordinates': [joints.pop(0), joints.pop(0)], 'quality': joints.pop(0)})
+                payload = {
+                    'timestamp': new_timestamp.strftime(s.ISO_FORMAT),
+                    'camera': device_id,
+                    'pose_model': pose_model_id,
+                    'source': inference_execution_id,
+                    'source_type': 'INFERRED',
+                    'keypoints': keypoints,
+                    'track_label': str(body.get("idx", "")),
+                    'tags': [
+                        'original-timestamp: {}'.format(video_timestamp),
+                        'env: {}'.format(s.ENV)
+                    ]
+                }
+                if score is not None:
+                    payload['quality'] = score
+                bulk_values.append(payload)
 
+    if num_of_keypoints == 17:
+        for body in pose_json:
+            image_id = body['image_id']
+            sec = int(image_id.split('.')[0], 10)
+            new_timestamp = video_timestamp + timedelta(seconds=sec * 0.1)
+            keypoints = []
+            joints = body['keypoints']
+            score = body.get("score")
             while joints:
                 keypoints.append({'coordinates': [joints.pop(0), joints.pop(0)], 'quality': joints.pop(0)})
-
             payload = {
                 'timestamp': new_timestamp.strftime(s.ISO_FORMAT),
                 'camera': device_id,
@@ -98,6 +127,7 @@ def parse_alphapose_json(pose_json, path, device_id, timestamp, inference_execut
     bulk_args['pose2D']['value'] = bulk_values
     p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=s.BATCH_SIZE)
     logging.info("honeycomb upload complete")
+
 
 def parse_openpose_json(video_path, device_id, timestamp, inference_execution_id):
     logging.info('processing: {}'.format(str(video_path)))
@@ -230,7 +260,15 @@ def upload_manifest(path, slot, pose_model, model, version):
                 outdir = out_dir_from_path(path)
                 pose_json = get_json(outdir)
                 # TODO - push data_id into the inferenceExecution sources
-                parse_alphapose_json(pose_json, path, device_id, timestamp, inference_execution_id)
+                parse_alphapose_json(18, pose_json, path, device_id, timestamp, inference_execution_id)
+        if pose_model == "alphapose_coco17":
+            for obj in paths:
+                path = obj.get("video")
+                timestamp = obj.get("timestamp")
+                outdir = out_dir_from_path(path)
+                pose_json = get_json(outdir)
+                # TODO - push data_id into the inferenceExecution sources
+                parse_alphapose_json(17, pose_json, path, device_id, timestamp, inference_execution_id)
         if pose_model == "openpose_body_25":
             for obj in paths:
                 path = obj.get("video")

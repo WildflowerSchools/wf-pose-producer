@@ -17,7 +17,7 @@ ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) -35s %(lineno) -5d: %(message)s')
 LOG_LEVEL = os.getenv("LOG_LEVEL", "WARNING")
 
-MODEL_NAME = "COCO-18"
+MODEL_NAME =  os.getenv("MODEL_NAME", "COCO-18")
 
 RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
 RABBIT_PASSWORD = os.getenv("RABBIT_PASSWORD", "guest")

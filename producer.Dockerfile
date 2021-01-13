@@ -1,3 +1,3 @@
-FROM wildflowerschools/wf-deep-docker:alphapose-producer-v119
+FROM wildflowerschools/wf-deep-docker:alphapose-producer-v129
 
 ENTRYPOINT ["producer"]

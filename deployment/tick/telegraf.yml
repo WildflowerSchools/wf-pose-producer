@@ -1,0 +1,180 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: telegraf
+  namespace: tick
+  labels:
+    app: telegraf
+spec:
+  selector:
+    matchLabels:
+      app: telegraf
+  template:
+    metadata:
+      namespace: tick
+      labels:
+        app: telegraf
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet
+      enableServiceLinks: true
+      containers:
+      - name: telegraf
+        image: "telegraf:1.9.5"
+        imagePullPolicy: "IfNotPresent"
+        ports:
+        - containerPort: 8092
+          protocol: UDP
+        - containerPort: 8094
+        - containerPort: 8125
+          protocol: UDP
+        env:
+        # This pulls HOSTNAME from the node, not the pod.
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: "HOST_PROC"
+          value: "/rootfs/proc"
+        - name: "HOST_SYS"
+          value: "/rootfs/sys"
+        volumeMounts:
+        - name: sysro
+          mountPath: /rootfs/sys
+          readOnly: true
+        - name: procro
+          mountPath: /rootfs/proc
+          readOnly: true
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: varrunutmpro
+          mountPath: /var/run/utmp
+          readOnly: true
+        - name: config
+          mountPath: /etc/telegraf
+        - name: hostfs
+          mountPath: /hostfs
+      serviceAccountName: telegraf-admin
+      volumes:
+      - name: sysro
+        hostPath:
+          path: /sys
+      - name: docker-socket
+        hostPath:
+          path: /var/run/docker.sock
+      - name: procro
+        hostPath:
+          path: /proc
+      - name: varrunutmpro
+        hostPath:
+          path: /var/run/utmp
+      - name: config
+        configMap:
+          name: telegraf
+      - name: kubertoken
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: kubertoken
+      - name: hostfs
+        hostPath:
+          path: /
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telegraf
+  namespace: tick
+  labels:
+    app: telegraf
+data:
+  telegraf.conf: |+
+    [agent]
+      interval = "10s"
+      round_interval = true
+      metric_batch_size = 1000
+      metric_buffer_limit = 10000
+      collection_jitter = "0s"
+      flush_interval = "10s"
+      flush_jitter = "0s"
+      precision = ""
+      debug = false
+      quiet = true
+      logfile = ""
+      hostname = "$HOSTNAME"
+      omit_hostname = false
+    [[outputs.influxdb]]
+      urls = ["http://influxdb.tick.svc.cluster.local:8086"]
+      database = "telegraf"
+      retention_policy = ""
+      write_consistency = "any"
+      timeout = "5s"
+      username = ""
+      password = ""
+      user_agent = "telegraf"
+      insecure_skip_verify = false
+    [[inputs.cpu]]
+      percpu = true
+      totalcpu = true
+      collect_cpu_time = false
+    [[inputs.disk]]
+      mount_points = ["/", "/data"]
+      ignore_fs = ["tmpfs", "devtmpfs"]
+    [[inputs.diskio]]
+    [[inputs.docker]]
+      endpoint = "unix:///var/run/docker.sock"
+      container_names = []
+      timeout = "5s"
+      perdevice = true
+      total = false
+    [[inputs.kernel]]
+    [[inputs.net]]
+      interfaces = ["eth*", "wlan*]", "lo"]
+    [[inputs.mem]]
+    [[inputs.processes]]
+    [[inputs.swap]]
+    [[inputs.system]]
+    [[inputs.socket_listener]]
+      service_address = "udp://:8092"
+      data_format = "influx"
+    [[inputs.statsd]]
+      service_address = ":8125"
+      metric_separator = "_"
+      allowed_pending_messages = 10000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telegraf
+  namespace: tick
+  labels:
+    app: telegraf
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8092
+    targetPort: 8092
+    name: api
+    protocol: UDP
+  selector:
+    app: telegraf
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: statsd
+  namespace: tick
+  labels:
+    app: telegraf
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8125
+    protocol: UDP
+    targetPort: 8125
+    name: statsd
+  selector:
+    app: telegraf

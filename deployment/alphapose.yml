@@ -2,30 +2,47 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: pose-producer
+  name: image-extraction
   namespace: inference
   labels:
-    name: pose-producer
+    name: image-extraction
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: pose-producer
+      name: image-extraction
   template:
     metadata:
       namespace: inference
       labels:
-        name: pose-producer
+        name: image-extraction
     spec:
       restartPolicy: Always
       containers:
-        - name: pose-producer
-          image: wildflowerschools/wf-deep-docker:alphapose-producer-worker-v1
+        - name: image-extraction
+          image: wildflowerschools/wf-deep-docker:pose-worker-v2
           imagePullPolicy: Always
           volumeMounts:
           - name: data
             mountPath: /data
-          command: ["python", "-m", "producer.theon", "cuda0"]
+          command: ["python", "-m", "producer.beta.imager", "cuda0"]
+          env:
+            - name: TELEGRAF_HOST
+              value: telegraf.tick.svc.cluster.local
+            - name: RABBIT_HOST
+              value: posebunny
+            - name: RABBIT_PORT
+              value: "5672"
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: username
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: password
           envFrom:
             - secretRef:
                 name: gpu-client-secrets
@@ -33,4 +50,450 @@ spec:
         - name: data
           hostPath:
             path: /data
+            type: Directory
+
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: poseshell
+  namespace: inference
+spec:
+  restartPolicy: OnFailure
+  containers:
+    - name: poseshell
+      image: wildflowerschools/wf-deep-docker:pose-worker-v2
+      command: [ "/bin/bash", "-c", "--" ]
+      args: [ "while true; do sleep 30; done;" ]
+      env:
+        - name: TELEGRAF_HOST
+          value: telegraf.tick.svc.cluster.local
+        - name: RABBIT_HOST
+          value: posebunny
+        - name: RABBIT_PORT
+          value: "5672"
+        - name: RABBIT_USER
+          valueFrom:
+            secretKeyRef:
+              name: posebunny-default-user
+              key: username
+        - name: RABBIT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: posebunny-default-user
+              key: password
+      envFrom:
+        - secretRef:
+            name: gpu-client-secrets
+      volumeMounts:
+      - name: data
+        mountPath: /data
+  volumes:
+    - name: data
+      hostPath:
+        path: /data
+        type: Directory
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: detector
+  namespace: inference
+  labels:
+    name: detector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: detector
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        name: detector
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: detector
+          image: wildflowerschools/wf-deep-docker:pose-worker-v2
+          imagePullPolicy: Always
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          - name: alpha
+            mountPath: /build/AlphaPose/data
+          - name: pretrained
+            mountPath: /build/AlphaPose/pretrained_models
+          command: ["python", "-m", "producer.beta.detection", "cuda0"]
+          env:
+            - name: TELEGRAF_HOST
+              value: telegraf.tick.svc.cluster.local
+            - name: RABBIT_HOST
+              value: posebunny
+            - name: RABBIT_PORT
+              value: "5672"
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: username
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: password
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+            type: Directory
+        - name: alpha
+          hostPath:
+            path: /data/alphapose-training/data
+            type: Directory
+        - name: pretrained
+          hostPath:
+            path: /data/alphapose-training/pretrained_models
+            type: Directory
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: estimator
+  namespace: inference
+  labels:
+    name: estimator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: estimator
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        name: estimator
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: estimator
+          image: wildflowerschools/wf-deep-docker:pose-worker-v2
+          imagePullPolicy: Always
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          - name: alpha
+            mountPath: /build/AlphaPose/data
+          - name: pretrained
+            mountPath: /build/AlphaPose/pretrained_models
+          command: ["python", "-m", "producer.beta.estimate", "cuda0"]
+          env:
+            - name: TELEGRAF_HOST
+              value: telegraf.tick.svc.cluster.local
+            - name: RABBIT_HOST
+              value: posebunny
+            - name: RABBIT_PORT
+              value: "5672"
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: username
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: password
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+            type: Directory
+        - name: alpha
+          hostPath:
+            path: /data/alphapose-training/data
+            type: Directory
+        - name: pretrained
+          hostPath:
+            path: /data/alphapose-training/pretrained_models
+            type: Directory
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: box-catalog
+  namespace: inference
+  labels:
+    name: box-catalog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: box-catalog
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        name: box-catalog
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: box-catalog
+          image: wildflowerschools/wf-deep-docker:pose-worker-v2
+          imagePullPolicy: Always
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          - name: alpha
+            mountPath: /build/AlphaPose/data
+          - name: pretrained
+            mountPath: /build/AlphaPose/pretrained_models
+          command: ["python", "-m", "producer.beta.boxtracking"]
+          env:
+            - name: TELEGRAF_HOST
+              value: telegraf.tick.svc.cluster.local
+            - name: RABBIT_HOST
+              value: posebunny
+            - name: RABBIT_PORT
+              value: "5672"
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: username
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: password
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+            type: Directory
+        - name: alpha
+          hostPath:
+            path: /data/alphapose-training/data
+            type: Directory
+        - name: pretrained
+          hostPath:
+            path: /data/alphapose-training/pretrained_models
+            type: Directory
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pose-rectify
+  namespace: inference
+  labels:
+    name: pose-rectify
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: pose-rectify
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        name: pose-rectify
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: pose-rectify
+          image: wildflowerschools/wf-deep-docker:pose-worker-v2
+          imagePullPolicy: Always
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          - name: alpha
+            mountPath: /build/AlphaPose/data
+          - name: pretrained
+            mountPath: /build/AlphaPose/pretrained_models
+          command: ["python", "-m", "producer.beta.imposeter", "rectify"]
+          env:
+            - name: TELEGRAF_HOST
+              value: telegraf.tick.svc.cluster.local
+            - name: RABBIT_HOST
+              value: posebunny
+            - name: RABBIT_PORT
+              value: "5672"
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: username
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: password
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+            type: Directory
+        - name: alpha
+          hostPath:
+            path: /data/alphapose-training/data
+            type: Directory
+        - name: pretrained
+          hostPath:
+            path: /data/alphapose-training/pretrained_models
+            type: Directory
+
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pose-deduplicate
+  namespace: inference
+  labels:
+    name: pose-deduplicate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: pose-deduplicate
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        name: pose-deduplicate
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: pose-deduplicate
+          image: wildflowerschools/wf-deep-docker:pose-worker-v2
+          imagePullPolicy: Always
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          - name: alpha
+            mountPath: /build/AlphaPose/data
+          - name: pretrained
+            mountPath: /build/AlphaPose/pretrained_models
+          command: ["python", "-m", "producer.beta.imposeter", "deduplicate"]
+          env:
+            - name: TELEGRAF_HOST
+              value: telegraf.tick.svc.cluster.local
+            - name: RABBIT_HOST
+              value: posebunny
+            - name: RABBIT_PORT
+              value: "5672"
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: username
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: password
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+            type: Directory
+        - name: alpha
+          hostPath:
+            path: /data/alphapose-training/data
+            type: Directory
+        - name: pretrained
+          hostPath:
+            path: /data/alphapose-training/pretrained_models
+            type: Directory
+
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pose-savelocal
+  namespace: inference
+  labels:
+    name: pose-savelocal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: pose-savelocal
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        name: pose-savelocal
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: pose-savelocal
+          image: wildflowerschools/wf-deep-docker:pose-worker-v2
+          imagePullPolicy: Always
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          - name: alpha
+            mountPath: /build/AlphaPose/data
+          - name: pretrained
+            mountPath: /build/AlphaPose/pretrained_models
+          command: ["python", "-m", "producer.beta.imposeter", "savelocal"]
+          env:
+            - name: TELEGRAF_HOST
+              value: telegraf.tick.svc.cluster.local
+            - name: RABBIT_HOST
+              value: posebunny
+            - name: RABBIT_PORT
+              value: "5672"
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: username
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: password
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+            type: Directory
+        - name: alpha
+          hostPath:
+            path: /data/alphapose-training/data
+            type: Directory
+        - name: pretrained
+          hostPath:
+            path: /data/alphapose-training/pretrained_models
             type: Directory

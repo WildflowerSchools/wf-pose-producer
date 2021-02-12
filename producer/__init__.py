@@ -7,11 +7,13 @@ import re
 
 import click
 
-from producer import settings as s
+from producer import settings
+from producer import helpers
+from producer import tasks
 
 LOGGER = logging.getLogger()
 
-LOGGER.setLevel(os.getenv("LOG_LEVEL", logging.INFO))
+LOGGER.setLevel(os.environ.get("LOG_LEVEL", logging.INFO))
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s - %(message)s'))
 LOGGER.addHandler(handler)
@@ -29,22 +31,20 @@ def parse_duration(time_str):
 
 
 @click.group()
-@click.pass_context
-def main(ctx):
+def main():
     pass
 
 
 @main.command()
-@click.pass_context
 @click.argument('environment_id')
 @click.argument('assignment_id')
 @click.argument('start')
 @click.argument('duration')
 @click.argument('slot')
-def poses(ctx, environment_id, assignment_id, start, duration, slot, inference_model="alphapose", inference_model_version="v1"):
+def poses(environment_id, assignment_id, start, duration, slot, inference_model="alphapose", inference_model_version="v1"):
     from producer.tasks import execute_manifest
     LOGGER.info('processing a manifest')
-    ppath = os.path.join(s.DATA_PROCESS_DIRECTORY, environment_id, assignment_id)
+    ppath = os.path.join(settings.DATA_PROCESS_DIRECTORY, environment_id, assignment_id)
     hasher = hashlib.sha1()
     hasher.update(start.encode('utf8'))
     hasher.update((datetime.strptime(start, ISO_FORMAT) + parse_duration(duration)).strftime(ISO_FORMAT).encode('utf8'))
@@ -52,29 +52,27 @@ def poses(ctx, environment_id, assignment_id, start, duration, slot, inference_m
     state_path = os.path.join(ppath, f"{state_id}.json")
     LOGGER.info(state_path)
     attempts = 0
-    while attempts < s.MAX_ATTEMPTS:
+    while attempts < settings.MAX_ATTEMPTS:
         try:
             execute_manifest(state_path, slot, inference_model, inference_model_version)
             return
         except Exception as err:
-            LOGGER.exception("inference run failed")
+            LOGGER.exception("inference run failed: %s", err)
             attempts += 1
 
 
 @main.command()
-@click.pass_context
 @click.argument('video_path')
-def video(ctx, video_path):
+def video(video_path):
     from producer.tasks import handle_video
     LOGGER.info('processing a video')
     handle_video(video_path)
 
 
-@main.command()
-@click.pass_context
+@main.command('hash')
 @click.argument('start')
 @click.argument('duration')
-def hash(ctx, start, duration):
+def hashjob(start, duration):
     LOGGER.info('generating a hash')
     hasher = hashlib.sha1()
     hasher.update(start.encode('utf8'))
@@ -83,7 +81,6 @@ def hash(ctx, start, duration):
 
 
 @main.command()
-@click.pass_context
 @click.argument('environment_id')
 @click.argument('assignment_id')
 @click.argument('start')
@@ -92,10 +89,10 @@ def hash(ctx, start, duration):
 @click.argument('pose_model')
 @click.argument('inference_model')
 @click.argument('inference_model_version')
-def upload_poses(ctx, environment_id, assignment_id, start, duration, slot, pose_model="alphapose_coco18", inference_model="alphapose", inference_model_version="v1"):
+def upload_poses(environment_id, assignment_id, start, duration, slot, pose_model="alphapose_coco18", inference_model="alphapose", inference_model_version="v1"):
     from producer.tasks import upload_manifest
     LOGGER.info('processing a manifest')
-    ppath = os.path.join(s.DATA_PROCESS_DIRECTORY, environment_id, assignment_id)
+    ppath = os.path.join(settings.DATA_PROCESS_DIRECTORY, environment_id, assignment_id)
     hasher = hashlib.sha1()
     hasher.update(start.encode('utf8'))
     hasher.update((datetime.strptime(start, ISO_FORMAT) + parse_duration(duration)).strftime(ISO_FORMAT).encode('utf8'))

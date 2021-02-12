@@ -1,0 +1,63 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kapacitor
+  namespace: tick
+  labels:
+    app: kapacitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kapacitor
+  template:
+    metadata:
+      namespace: tick
+      labels:
+        app: kapacitor
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet
+      enableServiceLinks: true
+      containers:
+      - name: kapacitor
+        image: "kapacitor:1.5.2"
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: KAPACITOR_HOSTNAME
+          value: kapacitor.tick
+        - name: KAPACITOR_INFLUXDB_0_URLS_0
+          value: http://influxdb.tick.svc.cluster.local:8086
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 0.1
+          limits:
+            memory: 512Gi
+            cpu: 1
+        ports:
+        - containerPort: 9092
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/kapacitor
+      volumes:
+      - name: data
+        hostPath:
+          path: /data/kapacitor
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kapacitor
+  namespace: tick
+  labels:
+    app: kapacitor
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9092
+    targetPort: 9092
+    name: api
+  selector:
+    app: kapacitor

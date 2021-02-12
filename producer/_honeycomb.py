@@ -1,7 +1,7 @@
 import logging
 import os
 
-import honeycomb
+import honeycomb as wildflower
 from gqlpycgen.utils import now, json_dumps
 
 
@@ -12,7 +12,7 @@ HONEYCOMB_CLIENT_ID = os.getenv("HONEYCOMB_CLIENT_ID")
 HONEYCOMB_CLIENT_SECRET = os.getenv("HONEYCOMB_CLIENT_SECRET")
 
 def get_client():
-    return honeycomb.HoneycombClient(
+    return wildflower.HoneycombClient(
         uri=HONEYCOMB_URI,
         client_credentials={
             'token_uri': HONEYCOMB_TOKEN_URI,

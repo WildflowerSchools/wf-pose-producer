@@ -1,0 +1,48 @@
+# requires the operator
+# kubectl apply -f "https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml"
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rabbit
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: Immediate
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: rabbit-pv
+spec:
+  claimRef:
+    name: persistence-posebunny-server-0
+    namespace: inference
+  capacity:
+    storage: 100Gi
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: rabbit
+  local:
+    path: /data/hutch
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - dudley-dowrong
+
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: posebunny
+  namespace: inference
+spec:
+  replicas: 1
+  persistence:
+    storageClassName: rabbit
+    storage: 100Gi

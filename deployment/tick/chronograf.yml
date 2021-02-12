@@ -1,0 +1,66 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: tick
+  name: chronograf
+  labels:
+    app: chronograf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chronograf
+  template:
+    metadata:
+      namespace: tick
+      labels:
+        app: chronograf
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet
+      enableServiceLinks: true
+      containers:
+      - name: chronograf
+        image: "chronograf:1.7.11"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8888
+          name: api
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: api
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: api
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/chronograf
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 0.1
+          limits:
+            memory: 512Gi
+            cpu: 1
+      volumes:
+        - name: data
+          hostPath:
+            path: /data/chronograf
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: tick
+  name: chronograf
+  labels:
+    app: chronograf
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8888
+    targetPort: 8888
+  selector:
+    app: chronograf

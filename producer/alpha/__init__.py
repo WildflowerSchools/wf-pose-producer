@@ -44,7 +44,7 @@ class AlphaPoser:
             self.gpus = []
         elif gpu is not None:
             self.gpus = [int(gpu)]
-        if len(self.gpus):
+        if len(self.gpus) > 0:
             self.device = torch.device("cuda:" + str(self.gpus[0]))
         else:
             self.device = torch.device("cpu")
@@ -52,12 +52,13 @@ class AlphaPoser:
         self.posebatch = posebatch
         self.tracking = (detector == 'tracker')
         self.detector = detector
-        self.pose_model =  builder.build_sppe(self.config.MODEL, preset_cfg=self.config.DATA_PRESET)
+        self.pose_model = builder.build_sppe(self.config.MODEL, preset_cfg=self.config.DATA_PRESET)
         logging.info(f'Loading pose model from {self.checkpoint}...')
         self.pose_model.load_state_dict(torch.load(self.checkpoint, map_location=self.device))
         self.pose_model.to(self.device)
         self.pose_model.eval()
         self.detector_instance = get_detector(self)
+        self.outputpath = ""
 
     def process_video(self, input_path, output_path):
         if output_json_exists(output_path):
@@ -104,13 +105,13 @@ class AlphaPoser:
                     logging.info("saving")
                     writer.save(boxes, scores, ids, hm, cropped_boxes, orig_img, os.path.basename(im_name))
                     del hm
-                logging.info(f"{i} of {data_len} complete")
+                logging.info("%s of %s complete", i, datalen)
 
             logging.info("finished inference")
 
-            while(writer.running()):
+            while writer.running():
                 time.sleep(1)
-                logging.info('===========================> Rendering remaining ' + str(writer.count()) + ' images in the queue...')
+                logging.info('===========================> Rendering remaining %s images in the queue...', str(writer.count()))
             writer.stop()
             det_loader.stop()
         except KeyboardInterrupt:
@@ -118,9 +119,9 @@ class AlphaPoser:
             # Thread won't be killed when press Ctrl+C
             if self._single_process:
                 det_loader.terminate()
-                while(writer.running()):
+                while writer.running():
                     time.sleep(1)
-                    logging.info('===========================> Rendering remaining ' + str(writer.count()) + ' images in the queue...')
+                    logging.info('===========================> Rendering remaining %s images in the queue...', str(writer.count()))
                 writer.stop()
             else:
                 # subprocesses are killed, manually clear queues

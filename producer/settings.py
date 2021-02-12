@@ -12,12 +12,12 @@ HONEYCOMB_AUDIENCE = os.getenv('HONEYCOMB_AUDIENCE')
 HONEYCOMB_CLIENT_ID = os.getenv('HONEYCOMB_CLIENT_ID')
 HONEYCOMB_CLIENT_SECRET = os.getenv('HONEYCOMB_CLIENT_SECRET')
 
-ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) -35s %(lineno) -5d: %(message)s')
 LOG_LEVEL = os.getenv("LOG_LEVEL", "WARNING")
 
-MODEL_NAME =  os.getenv("MODEL_NAME", "COCO-18")
+MODEL_NAME = os.getenv("MODEL_NAME", "COCO-18")
 
 RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
 RABBIT_PASSWORD = os.getenv("RABBIT_PASSWORD", "guest")

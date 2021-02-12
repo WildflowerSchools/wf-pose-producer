@@ -1,6 +1,6 @@
 FROM wildflowerschools/wf-deep-docker:cuda10.2-alphapose-base-v20
 
-RUN pip install retry click cython_bbox pynsq
+RUN pip install retry pika click wf-minimal-honeycomb-python wildflower-honeycomb-sdk
 
 RUN apt install -y jq
 

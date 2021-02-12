@@ -1,0 +1,134 @@
+import json
+import logging
+import os
+import time
+import torch
+
+from alphapose.utils.config import update_config
+from alphapose.utils.detector import DetectionLoader
+from alphapose.utils.presets import SimpleTransform
+from alphapose.models import builder
+from detector.apis import get_detector
+import numpy as np
+
+from producer.beta.loader import QueueWorkProcessor, ResultTarget
+from producer.helpers import rabbit_params, packb, unpackb, columnarize, ObjectView
+
+
+args = ObjectView({
+    "sp": True,
+    "tracking": "jde_1088x608",
+    "detector": "yolov4",
+    "device": "cpu",
+    "gpus": [],
+    "device": "cuda:0",
+    "gpus": [0],
+})
+
+
+class ImageDetectionWorker(QueueWorkProcessor):
+
+    def __init__(self, detector_cfg, detector_args, connection_params, source_queue_name, result_queue=None, batch_size=2, max_queue_size=4):
+        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size, max_queue_size=max_queue_size)
+        self.detector_cfg = detector_cfg
+        self.detector_args = detector_args
+        self.detector = get_detector(detector_args, detector_cfg['DETECTOR'])
+        self._input_size = detector_cfg.DATA_PRESET.IMAGE_SIZE
+        self._output_size = detector_cfg.DATA_PRESET.HEATMAP_SIZE
+        self._sigma = detector_cfg.DATA_PRESET.SIGMA
+        if detector_cfg.DATA_PRESET.TYPE == 'simple':
+            pose_dataset = builder.retrieve_dataset(self.detector_cfg.DATASET.TRAIN)
+            self.transformation = SimpleTransform(
+                pose_dataset, scale_factor=0,
+                input_size=self._input_size,
+                output_size=self._output_size,
+                rot=0, sigma=self._sigma,
+                train=False, add_dpg=False, gpu_device=detector_args.device)
+
+    def prepare_single(self, message):
+        decoded = unpackb(message)
+        return decoded
+
+    def process_batch(self, batch):
+        columns = columnarize(batch, ["img", "orig_img", "im_name", "im_dim", "date", "path", "assignment_id", "environment_id", "timestamp"])
+        imgs = columns["img"]
+        orig_imgs = columns["orig_img"]
+        im_names = columns["im_name"]
+        im_dim_list = columns["im_dim"]
+        date = columns["date"]
+        path = columns["path"]
+        assignment_id = columns["assignment_id"]
+        environment_id = columns["environment_id"]
+        timestamp = columns["timestamp"]
+        with torch.no_grad():
+            imgs = torch.cat(imgs) # pylint: disable=E1101
+            im_dim_list = torch.FloatTensor(im_dim_list).repeat(1, 2) # pylint: disable=E1101
+
+        with torch.no_grad():
+            # pad useless images to fill a batch, else there will be a bug
+            for pad_i in range(self.batch_size - len(imgs)):
+                imgs = torch.cat((imgs, torch.unsqueeze(imgs[0], dim=0)), 0) # pylint: disable=E1101
+                im_dim_list = torch.cat((im_dim_list, torch.unsqueeze(im_dim_list[0], dim=0)), 0) # pylint: disable=E1101
+
+            dets = self.detector.images_detection(imgs, im_dim_list)
+            if isinstance(dets, int) or dets.shape[0] == 0:
+                logging.info("nothing detected")
+                return []
+            if isinstance(dets, np.ndarray):
+                dets = torch.from_numpy(dets) # pylint: disable=E1101
+            dets = dets.cpu()
+            boxes = dets[:, 1:5]
+            scores = dets[:, 5:6]
+            # if self.opt.tracking:
+            #     ids = dets[:, 6:7]
+            # else:
+            ids = torch.zeros(scores.shape) # pylint: disable=E1101
+
+        results = []
+        for k, oimg in enumerate(orig_imgs):
+            boxes_k = boxes[dets[:, 0] == k]
+            if isinstance(boxes_k, int) or boxes_k.shape[0] == 0:
+                continue
+            inps = torch.zeros(boxes_k.size(0), 3, *self._input_size) # pylint: disable=E1101
+            cropped_boxes = torch.zeros(boxes_k.size(0), 4) # pylint: disable=E1101
+            self.crop_images(boxes_k, oimg, inps, cropped_boxes)
+            orig_img = oimg
+            im_name = im_names[k]
+            scores_k = scores[dets[:, 0] == k]
+            ids_k = ids[dets[:, 0] == k]
+            image_result = []
+            for index, box in enumerate(boxes_k):
+                image_result.append({
+                    "score": scores_k[index],
+                    "id": ids_k[index],
+                    "inp": inps[index],
+                    "cropped_box": cropped_boxes[index],
+                    "box": box,
+                })
+            results.append(packb({
+                "orig_img": orig_img,
+                "im_name": im_name,
+                "path": path[k],
+                "date": date[k],
+                "assignment_id": assignment_id[k],
+                "environment_id": environment_id[k],
+                "timestamp": timestamp[k],
+                "boxes": image_result,
+            }))
+        return results
+
+    def crop_images(self, boxes, orig_img, inps, cropped_boxes):
+        with torch.no_grad():
+            if boxes is None or boxes.nelement() == 0:
+                return
+            for i, box in enumerate(boxes):
+                inps[i], cropped_box = self.transformation.test_transform(orig_img, box)
+                cropped_boxes[i] = torch.FloatTensor(cropped_box) # pylint: disable=E1101
+
+
+if __name__ == '__main__':
+    cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
+    worker = ImageDetectionWorker(cfg, args, rabbit_params(), 'detection', result_queue=ResultTarget('boxes', 'catalog'))
+    preloader, processor = worker.start()
+    while not worker.stopped:
+        time.sleep(5)

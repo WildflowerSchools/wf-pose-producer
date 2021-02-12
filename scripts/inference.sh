@@ -114,7 +114,8 @@ function inference {
       log_verbose /data/prepared/$environment_id/$assignment_id/$state_id.$slot.json
       for f in $(cat /data/prepared/$environment_id/$assignment_id/$state_id.$slot.json | jq -r '.[].video')
       do
-          if [ ! -d /data/prepared/$environment_id/$assignment_id/$date/${f: -12:-4}/*.json ]; then
+          echo "/data/prepared/$environment_id/$assignment_id/$date/${f: -12:-4}/"
+          if [ ! -f /data/prepared/$environment_id/$assignment_id/$date/${f: -12:-4}/alphapose-results.json ]; then
               echo "allocating GPU"
               selected_gpu=""
               outdir=/data/prepared/$environment_id/$assignment_id/$date/${f: -12:-4}/

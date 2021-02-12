@@ -92,7 +92,7 @@ def parse_alphapose_json(num_of_keypoints, pose_json, path, device_id, timestamp
                         'env: {}'.format(s.ENV)
                     ]
                 }
-                if score is not None:
+                if score and ("nan" not in str(score)):
                     payload['quality'] = score
                 bulk_values.append(payload)
 
@@ -119,13 +119,21 @@ def parse_alphapose_json(num_of_keypoints, pose_json, path, device_id, timestamp
                     'env: {}'.format(s.ENV)
                 ]
             }
-            if score is not None:
+            # np.isnan could maybe be used here.
+            if score and ("nan" not in str(score)):
+                logging.info("pose score %s", score)
                 payload['quality'] = score
             bulk_values.append(payload)
-
-    bulk_args['pose2D']['value'] = bulk_values
-    poser.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=s.BATCH_SIZE)
-    logging.info("honeycomb upload complete")
+    try:
+        bulk_args['pose2D']['value'] = bulk_values
+        p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=s.BATCH_SIZE)
+        logging.info("honeycomb upload complete")
+    except Exception as err:
+        err_path = f"{path}.error.json"
+        logging.error("failed to upload batch to honeycomb")
+        logging.error("writing bulk_args to %s", err_path)
+        with open(err_path, 'w') as fp:
+            json.dump(bulk_args, fp)
 
 
 def parse_openpose_json(video_path, device_id, timestamp, inference_execution_id):
@@ -205,6 +213,7 @@ def execute_manifest(path, slot, model, version):
                 obj = json.loads(obj)
             video_path = obj.get("video")
             outdir = out_dir_from_path(video_path)
+            logging.info(outdir)
             if output_json_exists(outdir):
                 logging.info("output exists, skipping")
             else:

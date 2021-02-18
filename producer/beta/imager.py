@@ -18,8 +18,8 @@ args = ObjectView({
     "sp": True,
     "tracking": "jde_1088x608",
     "detector": "yolov4",
-    "device": "cuda:0",
-    "gpus": [0],
+    "device": "cpu",
+    "gpus": [],
 })
 
 

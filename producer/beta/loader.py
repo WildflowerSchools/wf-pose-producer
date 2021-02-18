@@ -27,10 +27,11 @@ class QueueWorkProcessor:
         self._stopped = False
 
     def preloader(self):
+        connection = pika.BlockingConnection(self.connection_params)
+        channel = connection.channel()
+        setup_exchanges(channel)
         while True:
-            connection = pika.BlockingConnection(self.connection_params)
-            channel = connection.channel()
-            setup_exchanges(channel)
+            wait_time = 2
             batch = []
             while len(batch) < self.batch_size:
                 if not connection.is_open:
@@ -48,7 +49,8 @@ class QueueWorkProcessor:
                     logging.info("timeout")
                     if len(batch) > 0:
                         break
-                    time.sleep(1)
+                    time.sleep(wait_time)
+                    wait_time *= wait_time
             logging.info("sending batch")
             self.queue.put(batch)
 
@@ -56,8 +58,13 @@ class QueueWorkProcessor:
         raise NotImplementedError("`prepare_single` has not been implemented, `QueueLoader` must be extended for purpose.")
 
     def processor(self):
+        if self.result_queue:
+            connection = pika.BlockingConnection(self.connection_params)
+            channel = connection.channel()
+            setup_exchanges(channel)
         while True:
             batch = self.queue.get()
+            wait_time = 2
             while batch:
                 try:
                     logging.info("starting batch [%s] (%s)", len(batch), self.__class__.__name__)
@@ -66,25 +73,29 @@ class QueueWorkProcessor:
                     logging.info("finished batch [%s] (%s)", len(result), self.__class__.__name__)
                     result = self.postprocess_batch(result)
                     emit('QueueWorkProcessor-stats', {"result_size": len("result"), }, {"class":  self.__class__.__name__, "type": "batch-complete"})
-                    if result and self.result_queue:
+                    if len(result) > 0 and self.result_queue:
                         exchange, routing_key = self.result_queue
-                        connection = pika.BlockingConnection(self.connection_params)
-                        channel = connection.channel()
-                        setup_exchanges(channel)
                         for item in result:
                             logging.info("publishing result item(%s)", (item is not None))
                             while item:
+                                if not connection.is_open:
+                                    logging.info("reconnecting")
+                                    connection = pika.BlockingConnection(self.connection_params)
+                                    channel = connection.channel()
                                 try:
                                     channel.basic_publish(exchange, routing_key, item)
                                     break
                                 except pika.exceptions.ConnectionBlockedTimeout as e:
                                     logging.info("timeout")
-                                    connection = pika.BlockingConnection(self.connection_params)
-                                    channel = connection.channel()
+                                    time.sleep(wait_time)
+                                    wait_time *= wait_time
                     del batch
                     batch = None
-                except Exception as e:
-                    logging.exception("failed to process [%s]", e)
+                except Exception as err:
+                    # TODO - log the batch so it can be recovered later
+                    logging.exception("failed to process [%s]", str(err))
+                    del batch
+                    batch = None
 
     def process_batch(self, batch):
         raise NotImplementedError("`process_batch` has not been implemented, `QueueLoader` must be extended for purpose.")

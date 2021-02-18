@@ -1,0 +1,63 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: video-collector-{{ job_slub }}
+  namespace: inference
+  labels:
+    name: video-collector-{{ job_slub }}
+spec:
+  template:
+    metadata:
+      namespace: inference
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: video-collector-{{ job_slub }}
+          image: wildflowerschools/wf-deep-docker:video-prepare-tooling-v34
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          command:
+          - python
+          - "-m"
+          - "inference_helpers"
+          - "prepare-assignment-videos"
+          - "--environment_name"
+          - "greenbrier"
+          - "--start"
+          - "{{ start_date }}"
+          - "--duration"
+          - "{{ duration }}"
+          - "--assignment"
+          - "{{ assignment_id }}"
+          - "--device"
+          - "{{ device_id }}"
+          env:
+            - name: DATA_PROCESS_DIRECTORY
+              value: '/data/prepared'
+            - name: TELEGRAF_HOST
+              value: telegraf.tick.svc.cluster.local
+            - name: RABBIT_HOST
+              value: posebunny
+            - name: RABBIT_PORT
+              value: "5672"
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: username
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: posebunny-default-user
+                  key: password
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+            type: Directory

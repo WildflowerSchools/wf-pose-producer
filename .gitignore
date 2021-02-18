@@ -1,3 +1,4 @@
 wf_pose_producer.egg-info/
 .python-version
 __pycache__/
+.env

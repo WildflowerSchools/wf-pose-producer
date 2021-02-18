@@ -3,6 +3,7 @@ import logging
 import os
 import time
 
+import click
 import torch
 from alphapose.models import builder
 from alphapose.utils.writer import DataWriter
@@ -15,22 +16,6 @@ from producer.beta.loader import QueueWorkProcessor, ResultTarget
 from producer.helpers import rabbit_params, packb, unpackb, columnarize, ObjectView, list_to_tensor
 # from producer.beta.ppose import pose_nms
 
-args = ObjectView({
-    "sp": True,
-    "tracking": False, # "jde_1088x608"
-    "detector": "yolov4",
-    "device": "cuda:0",
-    "gpus": [0],
-    "checkpoint": "/build/AlphaPose/pretrained_models/alphapose-wf_res152_256x192.0.2.yolov4.pth",
-    "qsize": 2048,
-    "save_img": False,
-    "pose_flow": False,
-    "posebatch": 10,
-    "outputpath": "/data/prepared",
-    "format": "cmu",
-    "eval": False,
-    "min_box_area": 0,
-})
 
 EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
@@ -119,9 +104,35 @@ class PoseEstimationWorker(QueueWorkProcessor):
         return results
 
 
-if __name__ == '__main__':
+@click.command()
+@click.option('--device')
+def main(device="cpu"):
+    gpus = []
+    if device != "cpu":
+        gpus = [int(device)]
+        device = f"cuda:{device}"
+    args = ObjectView({
+        "sp": True,
+        "tracking": False, # "jde_1088x608"
+        "detector": "yolov4",
+        "checkpoint": "/build/AlphaPose/pretrained_models/alphapose-wf_res152_256x192.0.2.yolov4.pth",
+        "qsize": 2048,
+        "save_img": False,
+        "pose_flow": False,
+        "posebatch": 10,
+        "outputpath": "/data/prepared",
+        "format": "cmu",
+        "eval": False,
+        "min_box_area": 0,
+        "device": device,
+        "gpus": gpus,
+    })
     cfg = update_config("/build/AlphaPose/data/pose_cfgs/wf_alphapose_inference_config.yaml")
     worker = PoseEstimationWorker(cfg, args, rabbit_params(), 'estimator', result_queue=ResultTarget('poses', '2dpose'))
     preloader, processor = worker.start()
     while not worker.stopped:
         time.sleep(5)
+
+
+if __name__ == '__main__':
+    main()

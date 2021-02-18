@@ -2,16 +2,13 @@
 # pylint: disable=C0111,C0103,R0205
 
 import functools
-import json
+import logging
 import time
-
 import pika
 
-from producer import settings as s
-from producer.helpers import get_logger
-from producer.tasks import produce_poses_job
-
-LOGGER = get_logger(__name__)
+LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
+              '-35s %(lineno) -5d: %(message)s')
+LOGGER = logging.getLogger(__name__)
 
 
 class AsyncConsumer(object):
@@ -27,8 +24,10 @@ class AsyncConsumer(object):
     commands that were issued and that should surface in the output as well.
 
     """
+    QUEUE = 'text'
+    ROUTING_KEY = 'example.text'
 
-    def __init__(self, amqp_url):
+    def __init__(self, amqp_url, exchange):
         """Create a new instance of the consumer class, passing in the AMQP
         URL used to connect to RabbitMQ.
 
@@ -37,6 +36,7 @@ class AsyncConsumer(object):
         """
         self.should_reconnect = False
         self.was_consuming = False
+        self.exchange = exchange
 
         self._connection = None
         self._channel = None
@@ -46,7 +46,7 @@ class AsyncConsumer(object):
         self._consuming = False
         # In production, experiment with higher prefetch values
         # for higher consumer throughput
-        self._prefetch_count = s.PREFETCH_COUNT
+        self._prefetch_count = 1
 
     def connect(self):
         """This method connects to RabbitMQ, returning the connection handle.
@@ -61,8 +61,7 @@ class AsyncConsumer(object):
             parameters=pika.URLParameters(self._url),
             on_open_callback=self.on_connection_open,
             on_open_error_callback=self.on_connection_open_error,
-            on_close_callback=self.on_connection_closed
-        )
+            on_close_callback=self.on_connection_closed)
 
     def close_connection(self):
         self._consuming = False
@@ -106,7 +105,6 @@ class AsyncConsumer(object):
         """
         self._channel = None
         if self._closing:
-            LOGGER.info('Stopping ioloop')
             self._connection.ioloop.stop()
         else:
             LOGGER.warning('Connection closed, reconnect necessary: %s', reason)
@@ -142,7 +140,7 @@ class AsyncConsumer(object):
         LOGGER.info('Channel opened')
         self._channel = channel
         self.add_on_channel_close_callback()
-        self.setup_exchange(s.EXCHANGE)
+        self.setup_exchange(self.exchange)
 
     def add_on_channel_close_callback(self):
         """This method tells pika to call the on_channel_closed method if
@@ -178,14 +176,11 @@ class AsyncConsumer(object):
         # Note: using functools.partial is not required, it is demonstrating
         # how arbitrary data can be passed to the callback when it is called
         cb = functools.partial(
-            self.on_exchange_declareok,
-            userdata=exchange_name
-        )
+            self.on_exchange_declareok, userdata=exchange_name)
         self._channel.exchange_declare(
             exchange=exchange_name,
-            exchange_type=s.EXCHANGE_TYPE,
-            callback=cb
-        )
+            exchange_type=self.exchange_TYPE,
+            callback=cb)
 
     def on_exchange_declareok(self, _unused_frame, userdata):
         """Invoked by pika when RabbitMQ has finished the Exchange.Declare RPC
@@ -196,8 +191,7 @@ class AsyncConsumer(object):
 
         """
         LOGGER.info('Exchange declared: %s', userdata)
-        LOGGER.info('self.QUEUE: %s', s.QUEUE)
-        self.setup_queue(s.QUEUE)
+        self.setup_queue(self.QUEUE)
 
     def setup_queue(self, queue_name):
         """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
@@ -209,7 +203,7 @@ class AsyncConsumer(object):
         """
         LOGGER.info('Declaring queue %s', queue_name)
         cb = functools.partial(self.on_queue_declareok, userdata=queue_name)
-        self._channel.queue_declare(queue=queue_name, callback=cb, durable=True)
+        self._channel.queue_declare(queue=queue_name, callback=cb)
 
     def on_queue_declareok(self, _unused_frame, userdata):
         """Method invoked by pika when the Queue.Declare RPC call made in
@@ -223,14 +217,14 @@ class AsyncConsumer(object):
 
         """
         queue_name = userdata
-        LOGGER.info('Binding %s to %s with %s', s.EXCHANGE, queue_name, s.ROUTING_KEY)
+        LOGGER.info('Binding %s to %s with %s', self.exchange, queue_name,
+                    self.ROUTING_KEY)
         cb = functools.partial(self.on_bindok, userdata=queue_name)
         self._channel.queue_bind(
             queue_name,
-            s.EXCHANGE,
-            routing_key=s.ROUTING_KEY,
-            callback=cb
-        )
+            self.exchange,
+            routing_key=self.ROUTING_KEY,
+            callback=cb)
 
     def on_bindok(self, _unused_frame, userdata):
         """Invoked by pika when the Queue.Bind method has completed. At this
@@ -251,9 +245,7 @@ class AsyncConsumer(object):
 
         """
         self._channel.basic_qos(
-            prefetch_count=self._prefetch_count,
-            callback=self.on_basic_qos_ok
-        )
+            prefetch_count=self._prefetch_count, callback=self.on_basic_qos_ok)
 
     def on_basic_qos_ok(self, _unused_frame):
         """Invoked by pika when the Basic.QoS method has completed. At this
@@ -279,9 +271,7 @@ class AsyncConsumer(object):
         LOGGER.info('Issuing consumer related RPC commands')
         self.add_on_cancel_callback()
         self._consumer_tag = self._channel.basic_consume(
-            s.QUEUE,
-            self.on_message
-        )
+            self.QUEUE, self.on_message)
         self.was_consuming = True
         self._consuming = True
 
@@ -301,7 +291,8 @@ class AsyncConsumer(object):
         :param pika.frame.Method method_frame: The Basic.Cancel frame
 
         """
-        LOGGER.info('Consumer was cancelled remotely, shutting down: %r', method_frame)
+        LOGGER.info('Consumer was cancelled remotely, shutting down: %r',
+                    method_frame)
         if self._channel:
             self._channel.close()
 
@@ -321,14 +312,7 @@ class AsyncConsumer(object):
         """
         LOGGER.info('Received message # %s from %s: %s',
                     basic_deliver.delivery_tag, properties.app_id, body)
-        msg = json.loads(body)
-        LOGGER.info(json.dumps(msg))
         self.acknowledge_message(basic_deliver.delivery_tag)
-        try:
-            produce_poses_job(msg)
-        except Exception as e:
-            LOGGER.error(str(e))
-
 
     def acknowledge_message(self, delivery_tag):
         """Acknowledge the message delivery from RabbitMQ by sending a
@@ -347,7 +331,8 @@ class AsyncConsumer(object):
         """
         if self._channel:
             LOGGER.info('Sending a Basic.Cancel RPC command to RabbitMQ')
-            cb = functools.partial(self.on_cancelok, userdata=self._consumer_tag)
+            cb = functools.partial(
+                self.on_cancelok, userdata=self._consumer_tag)
             self._channel.basic_cancel(self._consumer_tag, cb)
 
     def on_cancelok(self, _unused_frame, userdata):
@@ -361,7 +346,9 @@ class AsyncConsumer(object):
 
         """
         self._consuming = False
-        LOGGER.info('RabbitMQ acknowledged the cancellation of the consumer: %s', userdata)
+        LOGGER.info(
+            'RabbitMQ acknowledged the cancellation of the consumer: %s',
+            userdata)
         self.close_channel()
 
     def close_channel(self):
@@ -402,9 +389,9 @@ class AsyncConsumer(object):
             LOGGER.info('Stopped')
 
 
-class ReconnectingAsyncConsumer(object):
+class ReconnectingExampleConsumer(object):
     """This is an example consumer that will reconnect if the nested
-    AsyncConsumer indicates that a reconnect is necessary.
+    ExampleConsumer indicates that a reconnect is necessary.
 
     """
 
@@ -428,26 +415,24 @@ class ReconnectingAsyncConsumer(object):
             reconnect_delay = self._get_reconnect_delay()
             LOGGER.info('Reconnecting after %d seconds', reconnect_delay)
             time.sleep(reconnect_delay)
-            self._consumer = AsyncConsumer(self._amqp_url)
+            self._consumer = ExampleConsumer(self._amqp_url)
 
     def _get_reconnect_delay(self):
         if self._consumer.was_consuming:
             self._reconnect_delay = 0
         else:
             self._reconnect_delay += 1
-
         if self._reconnect_delay > 30:
             self._reconnect_delay = 30
-
         return self._reconnect_delay
 
 
-def consume():
-    amqp_url = 'amqp://{user}:{password}@{host}:{port}'.format(
-        user=s.RABBIT_USER,
-        password=s.RABBIT_PASSWORD,
-        host=s.RABBIT_HOST,
-        port=s.RABBIT_PORT
-    )
-    consumer = ReconnectingAsyncConsumer(amqp_url)
+def main():
+    logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
+    amqp_url = 'amqp://guest:guest@localhost:5672/%2F'
+    consumer = ReconnectingExampleConsumer(amqp_url)
     consumer.run()
+
+
+if __name__ == '__main__':
+    main()

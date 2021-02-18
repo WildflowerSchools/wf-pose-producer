@@ -126,7 +126,7 @@ def parse_alphapose_json(num_of_keypoints, pose_json, path, device_id, timestamp
             bulk_values.append(payload)
     try:
         bulk_args['pose2D']['value'] = bulk_values
-        p.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=s.BATCH_SIZE)
+        poser.client.bulk_mutation(request_name, bulk_args, return_object, chunk_size=s.BATCH_SIZE)
         logging.info("honeycomb upload complete")
     except Exception as err:
         err_path = f"{path}.error.json"

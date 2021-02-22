@@ -22,8 +22,8 @@ PoseWorkerOptions = namedtuple("PoseWorkerOptions", ["outputpattern", "format"])
 
 class PoseWorker(QueueWorkProcessor):
 
-    def __init__(self, command, opts, connection_params, source_queue_name, result_queue=None, batch_size=20, max_queue_size=5):
-        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size, max_queue_size=max_queue_size)
+    def __init__(self, command, opts, connection_params, source_queue_name, result_queue=None, batch_size=20):
+        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size)
         self.command = command
         self.opts = opts
 
@@ -78,14 +78,13 @@ class PoseWorker(QueueWorkProcessor):
                 pose_nms(
                     list_to_tensor(columns["bbox"]),
                     list_to_tensor(columns["score"]),
-                    # pylint: disable=E1102
                     torch.tensor([UUID(box_id).bytes for box_id in columns["box_id"]], dtype=torch.uint8),
-                    # pylint: enable=E1102
                     list_to_tensor(columns['keypoints']),
                     list_to_tensor(columns['kp_score']),
                     0)
             # 3) add result
             poses_clean = []
+            logging.debug(ids)
             ids = [str(UUID(bytes=bytes(box_id))) for box_id in ids]
             logging.info("ids after filter %s", ids)
             for k, box_id in enumerate(ids):
@@ -154,24 +153,24 @@ def main():
 @main.command()
 def rectify():
     worker = PoseWorker("rectify", None, rabbit_params(), 'pose-tracker', result_queue=ResultTarget('poses', 'imageid'))
-    preloader, processor = worker.start()
-    while not worker.stopped:
+    worker.start()
+    while True:
         time.sleep(5)
 
 
 @main.command()
 def deduplicate():
     worker = PoseWorker("deduplicate", None, rabbit_params(), 'pose-deduplicate', result_queue=ResultTarget('poses', '2dposeset'), batch_size=4)
-    preloader, processor = worker.start()
-    while not worker.stopped:
+    worker.start()
+    while True:
         time.sleep(5)
 
 
 @main.command()
 def savelocal():
     worker = PoseWorker("savelocal", None, rabbit_params(), 'pose-local', batch_size=10)
-    preloader, processor = worker.start()
-    while not worker.stopped:
+    worker.start()
+    while True:
         time.sleep(5)
 
 

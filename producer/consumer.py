@@ -24,14 +24,15 @@ class AsyncConsumer(AsyncConnection):
 
     """
 
-    def __init__(self, amqp_url, exchange, queue, routing_key, handler):
+    def __init__(self, connection_params, queue, handler, prefetch_count=1, routes=None):
         """Create a new instance of the consumer class, passing in the AMQP
         URL used to connect to RabbitMQ.
 
-        :param str amqp_url: The AMQP url to connect with
+        :param str connection_params: The AMQP url to connect with
 
         """
-        super().__init__(amqp_url, exchange, queue, routing_key)
+        super().__init__(connection_params, routes=routes)
+        self.queue = queue
         self.was_consuming = False
         self.handler = handler
 
@@ -40,7 +41,7 @@ class AsyncConsumer(AsyncConnection):
         self._consuming = False
         # In production, experiment with higher prefetch values
         # for higher consumer throughput
-        self._prefetch_count = 1
+        self._prefetch_count = prefetch_count
 
     def on_ready(self):
         self.set_qos()
@@ -99,8 +100,7 @@ class AsyncConsumer(AsyncConnection):
         :param pika.frame.Method method_frame: The Basic.Cancel frame
 
         """
-        logging.info('Consumer was cancelled remotely, shutting down: %r',
-                    method_frame)
+        logging.info('Consumer was cancelled remotely, shutting down: %r', method_frame)
         if self._channel:
             self._channel.close()
 
@@ -118,8 +118,8 @@ class AsyncConsumer(AsyncConnection):
         :param bytes body: The message body
 
         """
-        logging.info('Received message # %s from %s: %s',
-                    basic_deliver.delivery_tag, properties.app_id, body)
+        logging.info('Received message # %s from %s', basic_deliver.delivery_tag, properties.app_id)
+        self.handler.handle_message(body)
         self.acknowledge_message(basic_deliver.delivery_tag)
 
     def acknowledge_message(self, delivery_tag):
@@ -188,10 +188,14 @@ class ReconnectingConsumer(object):
 
     """
 
-    def __init__(self, amqp_url):
+    def __init__(self, connection_params, queue, handler, prefetch_count=1, routes=None):
         self._reconnect_delay = 0
-        self._amqp_url = amqp_url
-        self._consumer = AsyncConsumer(self._amqp_url)
+        self._connection_params = connection_params
+        self._queue = queue
+        self._handler = handler
+        self._prefetch_count = prefetch_count
+        self._routes = routes
+        self._consumer = AsyncConsumer(self._connection_params, self._queue, self._handler, self._prefetch_count, self._routes)
 
     def run(self):
         while True:
@@ -200,7 +204,13 @@ class ReconnectingConsumer(object):
             except KeyboardInterrupt:
                 self._consumer.stop()
                 break
+            except pika.exceptions.ConnectionWrongStateError as err:
+                self._consumer.stop()
+                break
             self._maybe_reconnect()
+
+    def __call__(self):
+        self.run()
 
     def _maybe_reconnect(self):
         if self._consumer.should_reconnect:
@@ -208,7 +218,7 @@ class ReconnectingConsumer(object):
             reconnect_delay = self._get_reconnect_delay()
             logging.info('Reconnecting after %d seconds', reconnect_delay)
             time.sleep(reconnect_delay)
-            self._consumer = ExampleConsumer(self._amqp_url)
+            self._consumer = AsyncConsumer(self._connection_params, self._queue, self._handler, self._prefetch_count, self._routes)
 
     def _get_reconnect_delay(self):
         if self._consumer.was_consuming:
@@ -218,14 +228,3 @@ class ReconnectingConsumer(object):
         if self._reconnect_delay > 30:
             self._reconnect_delay = 30
         return self._reconnect_delay
-
-
-def main():
-    logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
-    amqp_url = 'amqp://guest:guest@localhost:5672/%2F'
-    consumer = ReconnectingExampleConsumer(amqp_url)
-    consumer.run()
-
-
-if __name__ == '__main__':
-    main()

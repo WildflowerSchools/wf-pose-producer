@@ -22,8 +22,8 @@ EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
 class PoseEstimationWorker(QueueWorkProcessor):
 
-    def __init__(self, cfg, args, connection_params, source_queue_name, result_queue=None, batch_size=20, max_queue_size=4):
-        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size, max_queue_size=max_queue_size)
+    def __init__(self, cfg, args, connection_params, source_queue_name, result_queue=None, batch_size=20):
+        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size)
         self.cfg = cfg
         self.args = args
         self.pose_model = builder.build_sppe(cfg.MODEL, preset_cfg=cfg.DATA_PRESET)
@@ -129,8 +129,8 @@ def main(device="cpu"):
     })
     cfg = update_config("/build/AlphaPose/data/pose_cfgs/wf_alphapose_inference_config.yaml")
     worker = PoseEstimationWorker(cfg, args, rabbit_params(), 'estimator', result_queue=ResultTarget('poses', '2dpose'))
-    preloader, processor = worker.start()
-    while not worker.stopped:
+    worker.start()
+    while True:
         time.sleep(5)
 
 

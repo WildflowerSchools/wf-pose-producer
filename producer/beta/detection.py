@@ -15,14 +15,15 @@ import numpy as np
 
 from producer.beta.loader import QueueWorkProcessor, ResultTarget
 from producer.helpers import rabbit_params, packb, unpackb, columnarize, ObjectView
+from producer.publisher import MonitorQueue
 
 
 
 
 class ImageDetectionWorker(QueueWorkProcessor):
 
-    def __init__(self, detector_cfg, detector_args, connection_params, source_queue_name, result_queue=None, batch_size=2, max_queue_size=4):
-        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size, max_queue_size=max_queue_size)
+    def __init__(self, detector_cfg, detector_args, connection_params, source_queue_name, monitor_queue=None, result_queue=None, batch_size=2):
+        super().__init__(connection_params, source_queue_name, monitor_queue=monitor_queue, result_queue=result_queue, batch_size=batch_size)
         self.detector_cfg = detector_cfg
         self.detector_args = detector_args
         self.detector = get_detector(detector_args, detector_cfg['DETECTOR'])
@@ -130,10 +131,11 @@ def main(device="cpu"):
         "device": device,
         "gpus": gpus,
     })
+    monitor_queue = MonitorQueue('box-tracker', 100, 2)
     cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
-    worker = ImageDetectionWorker(cfg, args, rabbit_params(), 'detection', result_queue=ResultTarget('boxes', 'catalog'))
-    preloader, processor = worker.start()
-    while not worker.stopped:
+    worker = ImageDetectionWorker(cfg, args, rabbit_params(), 'detection', result_queue=ResultTarget('boxes', 'catalog'), monitor_queue=monitor_queue)
+    worker.start()
+    while True:
         time.sleep(5)
 
 

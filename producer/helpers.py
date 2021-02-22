@@ -48,13 +48,19 @@ def now():
 
 
 def rabbit_params():
-    return pika.ConnectionParameters(
-        host=os.environ.get("RABBIT_HOST", "localhost"),
-        port=int(os.environ.get("RABBIT_PORT", "5672")),
-        credentials=pika.credentials.PlainCredentials(os.environ.get("RABBIT_USER"), os.environ.get("RABBIT_PASS")),
-        blocked_connection_timeout=int(os.environ.get("RABBIT_BLOCK_TIMEOUT", "5")),
-        heartbeat=int(os.environ.get("RABBIT_HEARTBEAT", "300")),
-    )
+    # return pika.ConnectionParameters(
+    #     host=os.environ.get("RABBIT_HOST", "localhost"),
+    #     port=int(os.environ.get("RABBIT_PORT", "5672")),
+    #     credentials=pika.credentials.PlainCredentials(os.environ.get("RABBIT_USER"), os.environ.get("RABBIT_PASS")),
+    #     blocked_connection_timeout=int(os.environ.get("RABBIT_BLOCK_TIMEOUT", "5")),
+    #     heartbeat=int(os.environ.get("RABBIT_HEARTBEAT", "300")),
+    # )
+    return ObjectView({
+        "host": os.environ.get("RABBIT_HOST", "localhost"),
+        "port": int(os.environ.get("RABBIT_PORT", "15672")),
+        "username": os.environ.get("RABBIT_USER"),
+        "password": os.environ.get("RABBIT_PASS"),
+    })
 
 
 def __encoder(obj):

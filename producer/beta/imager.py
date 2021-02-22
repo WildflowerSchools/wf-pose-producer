@@ -12,6 +12,7 @@ from detector.apis import get_detector
 from producer.beta.loader import QueueWorkProcessor, ResultTarget
 from producer.helpers import rabbit_params, now, packb, unpackb, ObjectView
 from producer import settings as s
+from producer.publisher import MonitorQueue
 
 
 args = ObjectView({
@@ -25,8 +26,8 @@ args = ObjectView({
 
 class ImageExtractionWorker(QueueWorkProcessor):
 
-    def __init__(self, cfg, detector_args, connection_params, source_queue_name, result_queue=None, batch_size=1, max_queue_size=10):
-        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size, max_queue_size=max_queue_size)
+    def __init__(self, cfg, detector_args, connection_params, source_queue_name, monitor_queue=None, result_queue=None, batch_size=1):
+        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size, monitor_queue=monitor_queue)
         self.detector = get_detector(detector_args, cfg['DETECTOR'])
 
     def prepare_single(self, message):
@@ -76,7 +77,8 @@ class ImageExtractionWorker(QueueWorkProcessor):
 if __name__ == '__main__':
     from alphapose.utils.config import update_config
     cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
-    worker = ImageExtractionWorker(cfg, args, rabbit_params(), 'video', result_queue=ResultTarget('images', 'detector'))
-    preloader, processor = worker.start()
-    while not worker.stopped:
+    monitor_queue = MonitorQueue('detection', 200, 5)
+    worker = ImageExtractionWorker(cfg, args, rabbit_params(), 'video', monitor_queue=monitor_queue, result_queue=ResultTarget('images', 'detector'))
+    worker.start()
+    while True:
         time.sleep(5)

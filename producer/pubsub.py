@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=C0111,C0103,R0205
 
+from collections import namedtuple
+import copy
 import functools
 import logging
 import json
 
 import pika
+
+
+BunnyTrail = namedtuple('BunnyTrail', ['exchange', 'queue', 'routing_key'])
 
 
 class AsyncConnection:
@@ -18,23 +23,22 @@ class AsyncConnection:
     socket timeouts.
     """
 
-    def __init__(self, amqp_url, exchange, queue, routing_key):
+    def __init__(self, connection_params, routes=None):
         """Setup the example publisher object, passing in the URL we will use
         to connect to RabbitMQ.
 
-        :param str amqp_url: The URL for connecting to RabbitMQ
+        :param ConnectionParameters connection_params: The parameters for connecting to RabbitMQ
 
         """
-        self.exchange = exchange
-        self.queue = queue
-        self.routing_key = routing_key
+        self.routes = routes
         self.should_reconnect = False
 
         self._connection = None
         self._channel = None
 
         self._stopping = False
-        self._url = amqp_url
+        self._connection_params = connection_params
+        self._routes_setup = []
 
     def connect(self):
         """This method connects to RabbitMQ, returning the connection handle.
@@ -44,9 +48,9 @@ class AsyncConnection:
         :rtype: pika.SelectConnection
 
         """
-        logging.info('Connecting to %s', self._url)
+        logging.info('Connecting to %s', self._connection_params.host)
         return pika.SelectConnection(
-            pika.URLParameters(self._url),
+            self._connection_params,
             on_open_callback=self.on_connection_open,
             on_open_error_callback=self.on_connection_open_error,
             on_close_callback=self.on_connection_closed)
@@ -121,7 +125,7 @@ class AsyncConnection:
         logging.info('Channel opened')
         self._channel = channel
         self.add_on_channel_close_callback()
-        self.setup_exchange(self.exchange)
+        self.setup_exchanges()
 
     def add_on_channel_close_callback(self):
         """This method tells pika to call the on_channel_closed method if
@@ -143,9 +147,10 @@ class AsyncConnection:
 
         """
         logging.warning('Channel %i was closed: %s', channel, reason)
+        self._channel = None
         self.close_connection()
 
-    def setup_exchange(self, exchange_name):
+    def setup_exchanges(self):
         """Setup the exchange on RabbitMQ by invoking the Exchange.Declare RPC
         command. When it is complete, the on_exchange_declareok method will
         be invoked by pika.
@@ -153,16 +158,20 @@ class AsyncConnection:
         :param str|unicode exchange_name: The name of the exchange to declare
 
         """
-        logging.info('Declaring exchange %s', exchange_name)
-        # Note: using functools.partial is not required, it is demonstrating
-        # how arbitrary data can be passed to the callback when it is called
-        cb = functools.partial(
-            self.on_exchange_declareok, userdata=exchange_name)
-        self._channel.exchange_declare(
-            exchange=exchange_name,
-            callback=cb)
+        logging.info('Declaring exchanges')
+        if self.routes:
+            self._routes_setup = copy.deepcopy(self.routes)
+            for route in self.routes:
+                cb = functools.partial(
+                    self.on_exchange_declareok, route=route)
+                self._channel.exchange_declare(
+                    exchange=route.exchange,
+                    callback=cb)
+            # do I need a safety check to maker sure on_ready is called?
+        else:
+            self.on_ready()
 
-    def on_exchange_declareok(self, _unused_frame, userdata):
+    def on_exchange_declareok(self, _unused_frame, route):
         """Invoked by pika when RabbitMQ has finished the Exchange.Declare RPC
         command.
 
@@ -170,22 +179,20 @@ class AsyncConnection:
         :param str|unicode userdata: Extra user data (exchange name)
 
         """
-        logging.info('Exchange declared: %s', userdata)
-        self.setup_queue(self.queue)
-
-    def setup_queue(self, queue_name):
-        """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
-        command. When it is complete, the on_queue_declareok method will
-        be invoked by pika.
-
-        :param str|unicode queue_name: The name of the queue to declare.
-
-        """
-        logging.info('Declaring queue %s', queue_name)
+        logging.info('Exchange declared: %s', route.exchange)
+        logging.info('Declaring queue %s', route.queue)
+        cb = functools.partial(
+            self.on_queue_declareok, route=route)
         self._channel.queue_declare(
-            queue=queue_name, callback=self.on_queue_declareok)
+            queue=route.queue,
+            durable=True,
+            exclusive=False,
+            auto_delete=False,
+            callback=cb,
+            arguments={"x-queue-mode": "lazy"}
+        )
 
-    def on_queue_declareok(self, _unused_frame):
+    def on_queue_declareok(self, _unused_frame, route):
         """Method invoked by pika when the Queue.Declare RPC call made in
         setup_queue has completed. In this method we will bind the queue
         and exchange together with the routing key by issuing the Queue.Bind
@@ -195,20 +202,26 @@ class AsyncConnection:
         :param pika.frame.Method method_frame: The Queue.DeclareOk frame
 
         """
-        logging.info('Binding %s to %s with %s', self.exchange, self.queue,
-                    self.routing_key)
+        logging.info('Binding %s to %s with %s', route.exchange, route.queue, route.routing_key)
+        cb = functools.partial(
+            self.on_bindok,
+            route=route
+        )
         self._channel.queue_bind(
-            self.queue,
-            self.exchange,
-            routing_key=self.routing_key,
-            callback=self.on_bindok)
+            route.queue,
+            route.exchange,
+            routing_key=route.routing_key,
+            callback=cb
+        )
 
-    def on_bindok(self, _unused_frame):
+    def on_bindok(self, _unused_frame, route):
         """This method is invoked by pika when it receives the Queue.BindOk
         response from RabbitMQ. Since we know we're now setup and bound, it's
         time to start publishing or consuming."""
         logging.info('Queue bound')
-        self.on_ready()
+        self._routes_setup.remove(route)
+        if self._routes_setup is not None and len(self._routes_setup) == 0:
+            self.on_ready()
 
     def on_ready(self):
         raise NotImplementedError("`on_ready` has not been implemented.")
@@ -230,6 +243,9 @@ class AsyncConnection:
                     # Finish closing
                     self._connection.ioloop.start()
         logging.info('Stopped')
+
+    def __call__(self):
+        self.run()
 
     def stop(self):
         """Stop the example by closing the channel and connection. We

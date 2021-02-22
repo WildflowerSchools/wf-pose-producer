@@ -20,7 +20,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: image-extraction
-          image: wildflowerschools/wf-deep-docker:pose-worker-v3
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
           imagePullPolicy: IfNotPresent
           volumeMounts:
           - name: data
@@ -63,7 +63,7 @@ spec:
 #   restartPolicy: OnFailure
 #   containers:
 #     - name: poseshell
-#       image: wildflowerschools/wf-deep-docker:pose-worker-v3
+#       image: wildflowerschools/wf-deep-docker:pose-worker-v4
 #       command: [ "/bin/bash", "-c", "--" ]
 #       args: [ "while true; do sleep 30; done;" ]
 #       env:
@@ -118,7 +118,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: detector-cuda0
-          image: wildflowerschools/wf-deep-docker:pose-worker-v3
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
           imagePullPolicy: IfNotPresent
           volumeMounts:
           - name: data
@@ -184,7 +184,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: detector-cuda1
-          image: wildflowerschools/wf-deep-docker:pose-worker-v3
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
           imagePullPolicy: IfNotPresent
           volumeMounts:
           - name: data
@@ -251,7 +251,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: estimator-cuda1
-          image: wildflowerschools/wf-deep-docker:pose-worker-v3
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
           imagePullPolicy: IfNotPresent
           volumeMounts:
           - name: data
@@ -318,7 +318,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: estimator-cuda0
-          image: wildflowerschools/wf-deep-docker:pose-worker-v3
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
           imagePullPolicy: IfNotPresent
           volumeMounts:
           - name: data
@@ -384,7 +384,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: box-catalog
-          image: wildflowerschools/wf-deep-docker:pose-worker-v3
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
           imagePullPolicy: IfNotPresent
           volumeMounts:
           - name: data
@@ -451,7 +451,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: pose-rectify
-          image: wildflowerschools/wf-deep-docker:pose-worker-v3
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
           imagePullPolicy: IfNotPresent
           volumeMounts:
           - name: data
@@ -519,7 +519,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: pose-deduplicate
-          image: wildflowerschools/wf-deep-docker:pose-worker-v3
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
           imagePullPolicy: IfNotPresent
           volumeMounts:
           - name: data
@@ -587,7 +587,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: pose-savelocal
-          image: wildflowerschools/wf-deep-docker:pose-worker-v3
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
           imagePullPolicy: IfNotPresent
           volumeMounts:
           - name: data

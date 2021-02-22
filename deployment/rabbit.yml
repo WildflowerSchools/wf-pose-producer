@@ -108,12 +108,12 @@ spec:
   resources:
     requests:
       cpu: 2000m
-      memory: 4Gi
+      memory: 6Gi
     limits:
       cpu: 3000m
-      memory: 6Gi
+      memory: 8Gi
   rabbitmq:
     additionalConfig: |
       channel_max = 2300
       heartbeat = 30
-      vm_memory_high_watermark.absolute = 3G
+      vm_memory_high_watermark.absolute = 5G

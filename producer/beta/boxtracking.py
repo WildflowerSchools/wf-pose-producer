@@ -12,8 +12,8 @@ from producer.helpers import rabbit_params, now, packb, unpackb
 
 class BoxTrackerWorker(QueueWorkProcessor):
 
-    def __init__(self, connection_params, source_queue_name, result_queue=None, batch_size=20, max_queue_size=5):
-        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size, max_queue_size=max_queue_size)
+    def __init__(self, connection_params, source_queue_name, result_queue=None, batch_size=20):
+        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size)
 
     def prepare_single(self, message):
         return unpackb(message)
@@ -48,6 +48,6 @@ if __name__ == '__main__':
     from alphapose.utils.config import update_config
     cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
     worker = BoxTrackerWorker(rabbit_params(), 'box-tracker', result_queue=ResultTarget('boxes', 'estimation'))
-    preloader, processor = worker.start()
-    while not worker.stopped:
+    worker.start()
+    while True:
         time.sleep(5)

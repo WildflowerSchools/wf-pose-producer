@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import time
+from threading import Timer
 
 import cv2
 import numpy as np
@@ -77,8 +78,8 @@ class ImageExtractionWorker(QueueWorkProcessor):
 if __name__ == '__main__':
     from alphapose.utils.config import update_config
     cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
-    monitor_queue = MonitorQueue('detection', 200, 5)
-    worker = ImageExtractionWorker(cfg, args, rabbit_params(), 'video', monitor_queue=monitor_queue, result_queue=ResultTarget('images', 'detector'))
+    monitor_queue = MonitorQueue('detection', 1000, 5)
+    worker = ImageExtractionWorker(cfg, args, rabbit_params(), 'video', monitor_queue=monitor_queue, result_queue=ResultTarget('images', 'detector'), batch_size=1)
     worker.start()
     while True:
         time.sleep(5)

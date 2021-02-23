@@ -131,9 +131,9 @@ def main(device="cpu"):
         "device": device,
         "gpus": gpus,
     })
-    monitor_queue = MonitorQueue('box-tracker', 100, 2)
+    monitor_queue = MonitorQueue('box-tracker', 1000, 2)
     cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
-    worker = ImageDetectionWorker(cfg, args, rabbit_params(), 'detection', result_queue=ResultTarget('boxes', 'catalog'), monitor_queue=monitor_queue)
+    worker = ImageDetectionWorker(cfg, args, rabbit_params(), 'detection', result_queue=ResultTarget('boxes', 'catalog'), batch_size=10, monitor_queue=monitor_queue)
     worker.start()
     while True:
         time.sleep(5)

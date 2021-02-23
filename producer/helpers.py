@@ -18,6 +18,8 @@ from producer.settings import LOG_FORMAT, LOG_LEVEL
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 
+logging.basicConfig(level=logging.INFO)
+
 
 class ObjectView:
     def __init__(self, d):

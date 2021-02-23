@@ -58,10 +58,16 @@ class PoseEstimationWorker(QueueWorkProcessor):
         timestamp = columns["timestamp"]
 
         logging.info("processing batch: inps[%s] im_name[%s] boxes[%s]", len(inps), len(im_name), len(boxes))
-        boxes = list_to_tensor(boxes)
-        inps = list_to_tensor(inps)
-        scores = list_to_tensor(scores)
-        ids = list_to_tensor(ids)
+        try:
+            boxes = list_to_tensor(boxes)
+            inps = list_to_tensor(inps)
+            scores = list_to_tensor(scores)
+            ids = list_to_tensor(ids)
+        except IndexError as e:
+            logging.exception("empty lists for tensors")
+            logging.info(columns)
+            logging.info(batch)
+            raise e
         with torch.no_grad():
             inps = inps.to(self.args.device)
             hm = self.pose_model(inps)

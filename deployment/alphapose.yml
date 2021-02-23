@@ -32,7 +32,7 @@ spec:
             - name: RABBIT_HOST
               value: posebunny
             - name: RABBIT_PORT
-              value: "5672"
+              value: "15672"
             - name: RABBIT_USER
               valueFrom:
                 secretKeyRef:
@@ -72,7 +72,7 @@ spec:
 #         - name: RABBIT_HOST
 #           value: posebunny
 #         - name: RABBIT_PORT
-#           value: "5672"
+#           value: "15672"
 #         - name: RABBIT_USER
 #           valueFrom:
 #             secretKeyRef:
@@ -134,7 +134,7 @@ spec:
             - name: RABBIT_HOST
               value: posebunny
             - name: RABBIT_PORT
-              value: "5672"
+              value: "15672"
             - name: RABBIT_USER
               valueFrom:
                 secretKeyRef:
@@ -200,7 +200,7 @@ spec:
             - name: RABBIT_HOST
               value: posebunny
             - name: RABBIT_PORT
-              value: "5672"
+              value: "15672"
             - name: RABBIT_USER
               valueFrom:
                 secretKeyRef:
@@ -267,7 +267,7 @@ spec:
             - name: RABBIT_HOST
               value: posebunny
             - name: RABBIT_PORT
-              value: "5672"
+              value: "15672"
             - name: RABBIT_USER
               valueFrom:
                 secretKeyRef:
@@ -334,7 +334,7 @@ spec:
             - name: RABBIT_HOST
               value: posebunny
             - name: RABBIT_PORT
-              value: "5672"
+              value: "15672"
             - name: RABBIT_USER
               valueFrom:
                 secretKeyRef:
@@ -400,7 +400,7 @@ spec:
             - name: RABBIT_HOST
               value: posebunny
             - name: RABBIT_PORT
-              value: "5672"
+              value: "15672"
             - name: RABBIT_USER
               valueFrom:
                 secretKeyRef:
@@ -467,7 +467,7 @@ spec:
             - name: RABBIT_HOST
               value: posebunny
             - name: RABBIT_PORT
-              value: "5672"
+              value: "15672"
             - name: RABBIT_USER
               valueFrom:
                 secretKeyRef:
@@ -535,7 +535,7 @@ spec:
             - name: RABBIT_HOST
               value: posebunny
             - name: RABBIT_PORT
-              value: "5672"
+              value: "15672"
             - name: RABBIT_USER
               valueFrom:
                 secretKeyRef:
@@ -603,7 +603,7 @@ spec:
             - name: RABBIT_HOST
               value: posebunny
             - name: RABBIT_PORT
-              value: "5672"
+              value: "15672"
             - name: RABBIT_USER
               valueFrom:
                 secretKeyRef:

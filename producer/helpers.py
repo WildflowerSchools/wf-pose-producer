@@ -17,8 +17,9 @@ from producer.settings import LOG_FORMAT, LOG_LEVEL
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
+LOG_FORMAT = '%(levelname)-8s %(asctime)s %(name)-28s %(funcName)-15s: %(message)s'
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
 class ObjectView:

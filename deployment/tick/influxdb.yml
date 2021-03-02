@@ -180,13 +180,15 @@ spec:
             path: /ping
             port: api
           initialDelaySeconds: 30
-          timeoutSeconds: 5
+          timeoutSeconds: 600
         readinessProbe:
           httpGet:
             path: /ping
             port: api
-          initialDelaySeconds: 5
-          timeoutSeconds: 1
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+          successThreshold: 10
+          failureThreshold: 6
         volumeMounts:
         - name: data
           mountPath: /var/lib/influxdb

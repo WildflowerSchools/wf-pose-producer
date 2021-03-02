@@ -7,16 +7,14 @@ from uuid import uuid4
 import redis
 
 from producer.beta.loader import QueueWorkProcessor, ResultTarget
-from producer.helpers import rabbit_params, now, packb, unpackb
+from producer.helpers import rabbit_params, now, packb
+from producer.publisher import MonitorQueue
 
 
 class BoxTrackerWorker(QueueWorkProcessor):
 
-    def __init__(self, connection_params, source_queue_name, result_queue=None, batch_size=20):
-        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size)
-
-    def prepare_single(self, message):
-        return unpackb(message)
+    def __init__(self, connection_params, source_queue_name, result_queue=None, batch_size=20, monitor_queue=None):
+        super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size, monitor_queue=monitor_queue)
 
     def process_batch(self, batch):
         redis_conn = redis.Redis(host="redis")
@@ -47,7 +45,8 @@ class BoxTrackerWorker(QueueWorkProcessor):
 if __name__ == '__main__':
     from alphapose.utils.config import update_config
     cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
-    worker = BoxTrackerWorker(rabbit_params(), 'box-tracker', result_queue=ResultTarget('boxes', 'estimation'))
+    monitor_queue = MonitorQueue('estimator', 500, 5)
+    worker = BoxTrackerWorker(rabbit_params(), 'box-tracker', result_queue=ResultTarget('boxes', 'estimation'), monitor_queue=monitor_queue)
     worker.start()
     while True:
         time.sleep(5)

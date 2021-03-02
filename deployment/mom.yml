@@ -1,0 +1,31 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queue-monitor
+  namespace: inference
+  labels:
+    name: queue-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: queue-monitor
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        name: queue-monitor
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: queue-monitor
+          image: wildflowerschools/wf-deep-docker:pose-worker-v4
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "producer.mom"]
+          env:
+            - name: TELEGRAF_HOST
+              value: telegraf.tick.svc.cluster.local
+          envFrom:
+            - secretRef:
+                name: gpu-client-secrets

@@ -5,9 +5,11 @@ import os
 import time
 from threading import Timer
 
+import click
 import cv2
 import numpy as np
 import torch
+from alphapose.utils.config import update_config
 from detector.apis import get_detector
 
 from producer.beta.loader import QueueWorkProcessor, ResultTarget
@@ -16,23 +18,11 @@ from producer import settings as s
 from producer.publisher import MonitorQueue
 
 
-args = ObjectView({
-    "sp": True,
-    "tracking": "jde_1088x608",
-    "detector": "yolov4",
-    "device": "cpu",
-    "gpus": [],
-})
-
-
 class ImageExtractionWorker(QueueWorkProcessor):
 
     def __init__(self, cfg, detector_args, connection_params, source_queue_name, monitor_queue=None, result_queue=None, batch_size=1):
         super().__init__(connection_params, source_queue_name, result_queue=result_queue, batch_size=batch_size, monitor_queue=monitor_queue)
         self.detector = get_detector(detector_args, cfg['DETECTOR'])
-
-    def prepare_single(self, message):
-        return unpackb(message)
 
     def process_batch(self, batch):
         results = []
@@ -75,11 +65,31 @@ class ImageExtractionWorker(QueueWorkProcessor):
         return  results
 
 
-if __name__ == '__main__':
-    from alphapose.utils.config import update_config
+@click.command()
+@click.option('--device', required=False, default="cpu")
+@click.option('--batch', required=False, type=int, default=8)
+@click.option('--monitor', required=False, default="detection")
+@click.option('--monitor_limit', required=False, type=int, default=1000)
+def main(device="cpu", batch=8, monitor="detection", monitor_limit=1000):
+    logging.info("options passed => device: %s  batch: %s  monitor: %s  monitor_limit: %s", device, batch, monitor, monitor_limit)
     cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
-    monitor_queue = MonitorQueue('detection', 1000, 5)
-    worker = ImageExtractionWorker(cfg, args, rabbit_params(), 'video', monitor_queue=monitor_queue, result_queue=ResultTarget('images', 'detector'), batch_size=1)
+    gpus = []
+    if device != "cpu":
+        gpus = [int(device)]
+        device = f"cuda:{device}"
+    args = ObjectView({
+        "sp": True,
+        "tracking": "jde_1088x608",
+        "detector": "yolov4",
+        "device": device,
+        "gpus": gpus,
+    })
+    monitor_queue = MonitorQueue(monitor, int(monitor_limit), 5)
+    worker = ImageExtractionWorker(cfg, args, rabbit_params(), 'video', monitor_queue=monitor_queue, result_queue=ResultTarget('images', 'detector'), batch_size=int(batch))
     worker.start()
     while True:
         time.sleep(5)
+
+
+if __name__ == '__main__':
+    main()

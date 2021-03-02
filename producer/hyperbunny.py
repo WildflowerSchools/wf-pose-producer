@@ -14,6 +14,12 @@ class QueueHTTPWrapper:
     def __init__(self, connection_params, routes=None):
         self.connection_params = connection_params
         self.message_count = {}
+        self.routes = routes
+        self.auth = (self.connection_params.username, self.connection_params.password)
+        for exchange_name, queue_name, routing_key in routes:
+            requests.put(f"http://{self.connection_params.host}:{self.connection_params.port}/api/exchanges/%2F/{exchange_name}", json={"type":"direct"}, auth=self.auth)
+            requests.put(f"http://{self.connection_params.host}:{self.connection_params.port}/api/queues/%2F/{queue_name}", json={"durable":"true"}, auth=self.auth)
+            requests.put(f"http://{self.connection_params.host}:{self.connection_params.port}/api/bindings/%2F/e/{exchange_name}/q/{queue_name}", json={"routing_key":routing_key}, auth=self.auth)
 
     def publish_messages(self, exchange, routing_key, messages, vhost="%2F"):
         for message in messages:
@@ -31,7 +37,7 @@ class QueueHTTPWrapper:
                 resp = requests.post(
                     self._pub_url(exchange, vhost),
                     json=body,
-                    auth=(self.connection_params.username, self.connection_params.password),
+                    auth=self.auth,
                     timeout=3
                 )
                 print(resp.text)
@@ -50,7 +56,7 @@ class QueueHTTPWrapper:
                 resp = requests.post(
                     self._get_url(queue_name, vhost),
                     json=body,
-                    auth=(self.connection_params.username, self.connection_params.password),
+                    auth=self.auth,
                     timeout=3
                 )
                 break
@@ -69,7 +75,7 @@ class QueueHTTPWrapper:
         return 0
 
     def fetch_queue_size(self, queue_name, vhost="%2F"):
-        resp = requests.get(self._queue_url(queue_name, vhost), auth=(self.connection_params.username, self.connection_params.password), timeout=2).json()
+        resp = requests.get(self._queue_url(queue_name, vhost), auth=self.auth, timeout=2).json()
         self.message_count[queue_name] = resp['messages']
         return resp['messages']
 

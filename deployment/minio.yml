@@ -1,0 +1,56 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: inference
+  name: minio
+spec:
+  ports:
+    - port: 9000
+      name: minio
+  selector:
+    app: minio
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: inference
+spec:
+  selector:
+    matchLabels:
+      app: minio
+  serviceName: minio
+  replicas: 1
+  template:
+    metadata:
+      namespace: inference
+      labels:
+        app: minio
+    spec:
+      # nodeSelector:
+      #   wf-type: "control"
+      containers:
+      - name: minio
+        env:
+        - name: MINIO_REGION
+          value: us-east-1
+        envFrom:
+          - secretRef:
+              name: gpu-client-secrets
+        image: "minio/minio"
+        command:
+          - minio
+          - server
+          - /data
+        ports:
+        - containerPort: 9000
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+        - name: data
+          hostPath:
+            path: /data/queue
+            type: Directory

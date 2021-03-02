@@ -16,6 +16,7 @@ exchanges = [
     # BunnyTrail("boxes", "box-local", "catalog"),
     BunnyTrail("poses", "pose-tracker", "2dpose"),
     BunnyTrail("poses", "pose-deduplicate", "imageid"),
-    BunnyTrail("poses", "pose-upload", "2dposeset"),
+    # BunnyTrail("poses", "pose-upload", "2dposeset"),
     BunnyTrail("poses", "pose-local", "2dposeset"),
+    BunnyTrail("errors", "errors", "error"),
 ]

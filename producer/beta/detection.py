@@ -39,10 +39,6 @@ class ImageDetectionWorker(QueueWorkProcessor):
                 rot=0, sigma=self._sigma,
                 train=False, add_dpg=False, gpu_device=detector_args.device)
 
-    def prepare_single(self, message):
-        decoded = unpackb(message)
-        return decoded
-
     def process_batch(self, batch):
         columns = columnarize(batch, ["img", "orig_img", "im_name", "im_dim", "date", "path", "assignment_id", "environment_id", "timestamp"])
         imgs = columns["img"]
@@ -118,8 +114,12 @@ class ImageDetectionWorker(QueueWorkProcessor):
 
 
 @click.command()
-@click.option('--device')
-def main(device="cpu"):
+@click.option('--device', required=False, default="cpu")
+@click.option('--batch', required=False, type=int, default=8)
+@click.option('--monitor', required=False, default="detection")
+@click.option('--monitor_limit', required=False, type=int, default=1000)
+def main(device="cpu", batch=8, monitor="box-tracker", monitor_limit=1000):
+    logging.info("options passed => device: %s  batch: %s  monitor: %s  monitor_limit: %s", device, batch, monitor, monitor_limit)
     gpus = []
     if device != "cpu":
         gpus = [int(device)]
@@ -131,9 +131,9 @@ def main(device="cpu"):
         "device": device,
         "gpus": gpus,
     })
-    monitor_queue = MonitorQueue('box-tracker', 1000, 2)
+    monitor_queue = MonitorQueue(monitor, int(monitor_limit), 2)
     cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
-    worker = ImageDetectionWorker(cfg, args, rabbit_params(), 'detection', result_queue=ResultTarget('boxes', 'catalog'), batch_size=10, monitor_queue=monitor_queue)
+    worker = ImageDetectionWorker(cfg, args, rabbit_params(), 'detection', result_queue=ResultTarget('boxes', 'catalog'), batch_size=batch, monitor_queue=monitor_queue)
     worker.start()
     while True:
         time.sleep(5)

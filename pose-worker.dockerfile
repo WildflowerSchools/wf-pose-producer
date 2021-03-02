@@ -2,7 +2,7 @@ FROM wildflowerschools/wf-deep-docker:cuda10.2-alphapose-base-v21
 
 
 RUN pip install retry pika click wf-minimal-honeycomb-python wildflower-honeycomb-sdk \
-    pytelegraf redis hiredis marshmallow
+    pytelegraf redis hiredis minio tenacity
 
 RUN apt install -y jq
 

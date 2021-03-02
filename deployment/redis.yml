@@ -17,11 +17,31 @@ spec:
     spec:
       containers:
         - name: redis-queue
-          image: redis:6.0
+          image: redis:6.2
           imagePullPolicy: IfNotPresent
+          command: ["redis-server", "/etc/redis/redis.conf"]
           ports:
             - containerPort: 6379
-
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 16Gi
+            limits:
+              cpu: 2000m
+              memory: 20Gi
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          - name: config
+            mountPath: /etc/redis/
+      volumes:
+        - name: data
+          hostPath:
+            path: /data/redis
+            type: Directory
+        - name: config
+          configMap:
+            name: redis-config
 ---
 apiVersion: v1
 kind: Service
@@ -34,3 +54,114 @@ spec:
       name: redis
   selector:
     app: redis
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-queue
+  namespace: inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-queue
+  template:
+    metadata:
+      namespace: classroom
+      labels:
+        app: redis-queue
+    spec:
+      containers:
+        - name: redis-queue
+          image: redis:6.2
+          imagePullPolicy: IfNotPresent
+          command: ["redis-server", "/etc/redis/redis.conf"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 24Gi
+            limits:
+              cpu: 2000m
+              memory: 24Gi
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          - name: config
+            mountPath: /etc/redis/
+      volumes:
+        - name: data
+          hostPath:
+            path: /data/redis-queue
+            type: Directory
+        - name: config
+          configMap:
+            name: redis-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: inference
+  name: redis-queue
+spec:
+  ports:
+    - port: 6379
+      name: redis-queue
+  selector:
+    app: redis-queue
+
+
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: inference
+  labels:
+    app: redis
+data:
+  redis.conf: |+
+    port 6379
+    timeout 0
+    tcp-keepalive 300
+    daemonize no
+    supervised no
+    loglevel notice
+    logfile ""
+    databases 1
+    always-show-logo yes
+    # save 900 1
+    # save 300 100
+    # save 60 100000
+    # stop-writes-on-bgsave-error yes
+    # rdbcompression yes
+    # rdbchecksum yes
+    # dbfilename dump.rdb
+    # rdb-del-sync-files no
+    # dir /data
+    lazyfree-lazy-eviction no
+    lazyfree-lazy-expire no
+    lazyfree-lazy-server-del no
+    replica-lazy-flush no
+    lazyfree-lazy-user-del no
+    io-threads 2
+    # io-threads-do-reads no
+    appendonly no
+    # appendonly yes
+    # appendfilename "appendonly.aof"
+    # appendfsync everysec
+    # no-appendfsync-on-rewrite no
+    # auto-aof-rewrite-percentage 100
+    # auto-aof-rewrite-min-size 64mb
+    #
+    # aof-load-truncated yes
+    # aof-use-rdb-preamble yes
+    lua-time-limit 500
+    slowlog-log-slower-than 1000
+    slowlog-max-len 128
+    latency-monitor-threshold 0
+    jemalloc-bg-thread yes

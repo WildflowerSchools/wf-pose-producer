@@ -443,7 +443,7 @@ def write_json(all_results, outputpath, form=None, for_eval=False):
     json_results = []
     json_results_cmu = {}
     for im_res in all_results:
-        im_name = im_res['imgname']
+        im_name = im_res['im_name']
         for human in im_res['result']:
             keypoints = []
             result = {}

@@ -1,46 +1,48 @@
-import json
 import logging
 import os
-import time
 
-import click
 import torch
+import numpy as np
 
 from alphapose.utils.config import update_config
-from alphapose.utils.detector import DetectionLoader
 from alphapose.utils.presets import SimpleTransform
 from alphapose.models import builder
 from detector.apis import get_detector
-import numpy as np
 
-from producer.beta.loader import QueueWorkProcessor, ResultTarget
-from producer.helpers import rabbit_params, packb, unpackb, columnarize, ObjectView
-from producer.publisher import MonitorQueue
+from producer.helpers import columnarize, ObjectView
 
 
+class ImageDetectionWorker:
 
-
-class ImageDetectionWorker(QueueWorkProcessor):
-
-    def __init__(self, detector_cfg, detector_args, connection_params, source_queue_name, monitor_queue=None, result_queue=None, batch_size=2):
-        super().__init__(connection_params, source_queue_name, monitor_queue=monitor_queue, result_queue=result_queue, batch_size=batch_size)
-        self.detector_cfg = detector_cfg
-        self.detector_args = detector_args
-        self.detector = get_detector(detector_args, detector_cfg['DETECTOR'])
-        self._input_size = detector_cfg.DATA_PRESET.IMAGE_SIZE
-        self._output_size = detector_cfg.DATA_PRESET.HEATMAP_SIZE
-        self._sigma = detector_cfg.DATA_PRESET.SIGMA
-        if detector_cfg.DATA_PRESET.TYPE == 'simple':
+    def __init__(self, device, batch_size=2):
+        gpus = []
+        if device != "cpu":
+            gpus = [int(device)]
+            device = f"cuda:{device}"
+        self.detector_args = ObjectView({
+            "sp": True,
+            "tracking": "jde_1088x608",
+            "detector": "yolov4",
+            "device": device,
+            "gpus": gpus,
+        })
+        self.batch_size = batch_size
+        self.detector_cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
+        self.detector = get_detector(self.detector_args, self.detector_cfg['DETECTOR'])
+        self._input_size = self.detector_cfg.DATA_PRESET.IMAGE_SIZE
+        self._output_size = self.detector_cfg.DATA_PRESET.HEATMAP_SIZE
+        self._sigma = self.detector_cfg.DATA_PRESET.SIGMA
+        if self.detector_cfg.DATA_PRESET.TYPE == 'simple':
             pose_dataset = builder.retrieve_dataset(self.detector_cfg.DATASET.TRAIN)
             self.transformation = SimpleTransform(
                 pose_dataset, scale_factor=0,
                 input_size=self._input_size,
                 output_size=self._output_size,
                 rot=0, sigma=self._sigma,
-                train=False, add_dpg=False, gpu_device=detector_args.device)
+                train=False, add_dpg=False, gpu_device=self.detector_args.device)
 
     def process_batch(self, batch):
-        columns = columnarize(batch, ["img", "orig_img", "im_name", "im_dim", "date", "path", "assignment_id", "environment_id", "timestamp"])
+        columns = columnarize(batch, ["img", "image_id", "orig_img", "im_name", "im_dim", "date", "path", "assignment_id", "environment_id", "timestamp"])
         imgs = columns["img"]
         orig_imgs = columns["orig_img"]
         im_names = columns["im_name"]
@@ -50,6 +52,7 @@ class ImageDetectionWorker(QueueWorkProcessor):
         assignment_id = columns["assignment_id"]
         environment_id = columns["environment_id"]
         timestamp = columns["timestamp"]
+        image_id = columns["image_id"]
         with torch.no_grad():
             imgs = torch.cat(imgs)
             im_dim_list = torch.FloatTensor(im_dim_list).repeat(1, 2)
@@ -92,7 +95,8 @@ class ImageDetectionWorker(QueueWorkProcessor):
                     "cropped_box": cropped_boxes[index],
                     "box": box,
                 })
-            results.append(packb({
+            results.append({
+                "image_id": image_id[k],
                 "orig_img": orig_img,
                 "im_name": im_name,
                 "path": path[k],
@@ -101,7 +105,9 @@ class ImageDetectionWorker(QueueWorkProcessor):
                 "environment_id": environment_id[k],
                 "timestamp": timestamp[k],
                 "boxes": image_result,
-            }))
+            })
+        del batch
+        del columns
         return results
 
     def crop_images(self, boxes, orig_img, inps, cropped_boxes):
@@ -111,33 +117,3 @@ class ImageDetectionWorker(QueueWorkProcessor):
             for i, box in enumerate(boxes):
                 inps[i], cropped_box = self.transformation.test_transform(orig_img, box)
                 cropped_boxes[i] = torch.FloatTensor(cropped_box)
-
-
-@click.command()
-@click.option('--device', required=False, default="cpu")
-@click.option('--batch', required=False, type=int, default=8)
-@click.option('--monitor', required=False, default="detection")
-@click.option('--monitor_limit', required=False, type=int, default=1000)
-def main(device="cpu", batch=8, monitor="box-tracker", monitor_limit=1000):
-    logging.info("options passed => device: %s  batch: %s  monitor: %s  monitor_limit: %s", device, batch, monitor, monitor_limit)
-    gpus = []
-    if device != "cpu":
-        gpus = [int(device)]
-        device = f"cuda:{device}"
-    args = ObjectView({
-        "sp": True,
-        "tracking": "jde_1088x608",
-        "detector": "yolov4",
-        "device": device,
-        "gpus": gpus,
-    })
-    monitor_queue = MonitorQueue(monitor, int(monitor_limit), 2)
-    cfg = update_config("/data/alphapose-training/data/pose_cfgs/wf_alphapose_inference_config.yaml")
-    worker = ImageDetectionWorker(cfg, args, rabbit_params(), 'detection', result_queue=ResultTarget('boxes', 'catalog'), batch_size=batch, monitor_queue=monitor_queue)
-    worker.start()
-    while True:
-        time.sleep(5)
-
-
-if __name__ == '__main__':
-    main()

@@ -2,24 +2,28 @@
 Helper ulility functions used in multiple modules
 """
 import copy
-from datetime import datetime
+from datetime import datetime, date
+from enum import EnumMeta
 import io
+from itertools import chain, islice
 import json
 import logging
 import os
 
 import msgpack
 import numpy as np
-import pika
 import torch
 
 from producer.settings import LOG_FORMAT, LOG_LEVEL
 
+
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+DATE_FORMAT = "%Y-%m-%d"
 
-LOG_FORMAT = '%(levelname)-8s %(asctime)s %(name)-28s %(funcName)-15s: %(message)s'
 
-logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+def chunks(it, size):
+    it = iter(it)
+    return iter(lambda: tuple(islice(it, size)), ())
 
 
 class ObjectView:
@@ -64,6 +68,37 @@ def rabbit_params():
         "username": os.environ.get("RABBIT_USER"),
         "password": os.environ.get("RABBIT_PASS"),
     })
+
+
+def decode(val):
+    if val and hasattr(val, "decode"):
+        return val.decode("utf8")
+    return val
+
+
+class CustomJsonEncoder(json.JSONEncoder):
+
+    def default(self, obj):
+        if isinstance(obj, bytes):
+            return obj.decode("utf8")
+        if isinstance(obj, datetime):
+            return obj.strftime(ISO_FORMAT)
+        if isinstance(obj, date):
+            return obj.strftime(DATE_FORMAT)
+        if hasattr(obj, "to_dict"):
+            to_json = getattr(obj, "to_dict")
+            if callable(to_json):
+                return to_json()
+        if hasattr(obj, "value"):
+            return obj.value
+        return json.JSONEncoder.default(self, obj)
+
+
+def json_dumps(data, pretty=False):
+    if pretty:
+        return json.dumps(data, cls=CustomJsonEncoder, indent=4, sort_keys=True)
+    return json.dumps(data, cls=CustomJsonEncoder)
+
 
 
 def __encoder(obj):

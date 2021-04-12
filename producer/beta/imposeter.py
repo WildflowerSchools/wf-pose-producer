@@ -141,7 +141,7 @@ class PoseWorker(QueueWorkProcessor):
                 logging.info("output headed for %s", dirname)
                 frame = PoseFrame(
                     image_id=poses[0]["image_id"],
-                    image_name=poses[0]["imgname"],
+                    image_name=poses[0]["im_name"],
                     assignment_id=poses[0]["assignment_id"],
                     environment_id=poses[0]["environment_id"],
                     timestamp=poses[0]["timestamp"],

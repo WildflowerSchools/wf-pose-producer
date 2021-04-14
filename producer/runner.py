@@ -32,8 +32,10 @@ class PoseFactory:
             detection_batch_size=8,
             estimator_batch_size=10,
             debug=False,
+            preload_only=False,
             worker_count=4,
         ):
+        start = datetime.now()
         self.gpus = gpus.split(',')
         self.environment_name = environment_name
         self.start_date = start_date
@@ -43,6 +45,7 @@ class PoseFactory:
         self.estimator_batch_size = estimator_batch_size
         self.debug = debug
         self.worker_count = worker_count
+        self.preload_only = preload_only
         if debug:
             logging.info("PoseFactory Starting")
             logging.info("environment_name:       %s", environment_name)
@@ -54,34 +57,23 @@ class PoseFactory:
             logging.info("estimator_batch_size:   %s", estimator_batch_size)
             logging.info("debug:                  %s", debug)
             logging.info("worker_count:           %s", worker_count)
-        self.queue = Queue()
-        self.process_list = [PoseProducer(self.queue, gpu, detection_batch_size, estimator_batch_size, debug, worker_count) for gpu in self.gpus]
-        # use video-io to pull down videos and create job files
+        if not preload_only:
+            self.queue = Queue()
+            self.process_list = [PoseProducer(self.queue, gpu, detection_batch_size, estimator_batch_size, debug, worker_count) for gpu in self.gpus]
+            # use video-io to pull down videos and create job files
         try:
             self._fetch_videos()
         except Exception:
             logging.exception("problem with fetching videos")
-        # feed job file paths to the queue as they become available.
-        # when all videos are ready and job files in queue the queue the `SHUTDOWN` commands and return.
-        for _ in self.gpus:
-            self.queue.put("SHUTDOWN")
-        while True:
-            is_done = True
-            for i, pp in enumerate(self.process_list):
-                if pp.p.is_alive():
-                    is_done = False
-                else:
-                    logging.info("%s has died", pp.p.name)
-                    pp.p.join()
-                    if not self.queue.empty():
-                        self.process_list[i] = PoseProducer(self.queue, pp.gpu, self.detection_batch_size, self.estimator_batch_size, self.debug, self.worker_count)
-                        logging.info("restarted %s", pp.p.name)
-                        del pp
-                        gc.collect()
-            if is_done:
-                return
-            time.sleep(10)
-            logging.info("waiting for the worms")
+        if not preload_only:
+            # feed job file paths to the queue as they become available.
+            # when all videos are ready and job files in queue the queue the `SHUTDOWN` commands and return.
+            for _ in self.gpus:
+                self.queue.put("SHUTDOWN")
+            while not self.queue.empty():
+                time.sleep(1)
+        end = datetime.now()
+        logging.info("all work took %f seconds", (end - start).total_seconds())
 
     def _fetch_videos(self):
         results = fetch_videos(
@@ -111,7 +103,8 @@ class PoseFactory:
                     }))
                     outa_computown.write('\n')
                 outa_computown.flush()
-            self.queue.put(fname)
+            if not self.preload_only:
+                self.queue.put(fname)
 
 
 class PoseProducer:
@@ -191,8 +184,9 @@ def cli():
 @click.option('--detection-batch-size', required=False, type=int, default=8)
 @click.option('--estimator-batch-size', required=False, type=int, default=10)
 @click.option('--debug/--no-debug')
+@click.option('--preload-only/--no-preload-only')
 @click.option('--worker-count', required=False, type=int, default=4)
-def main(environment_name, start, duration="8h", producer_batch_size=36, gpus="0", detection_batch_size=8, estimator_batch_size=10, debug=False, worker_count=4):
+def main(environment_name, start, duration="8h", producer_batch_size=36, gpus="0", detection_batch_size=8, estimator_batch_size=10, debug=False, worker_count=4, preload_only=False):
     torch.multiprocessing.set_start_method('forkserver', force=True)
     start_date = dateparser.parse(start)  # example: "2021-02-09T07:30:00.000-0600"
     delta = parse_duration(duration)
@@ -207,6 +201,7 @@ def main(environment_name, start, duration="8h", producer_batch_size=36, gpus="0
         estimator_batch_size=estimator_batch_size,
         debug=debug,
         worker_count=worker_count,
+        preload_only=preload_only,
     )
 
 

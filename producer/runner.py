@@ -70,7 +70,7 @@ class PoseFactory:
             # when all videos are ready and job files in queue the queue the `SHUTDOWN` commands and return.
             for _ in self.gpus:
                 self.queue.put("SHUTDOWN")
-            while not self.queue.empty():
+            while not self.queue.empty() or self.queue.qsize() > len(self.process_list):
                 time.sleep(1)
         end = datetime.now()
         logging.info("all work took %f seconds", (end - start).total_seconds())

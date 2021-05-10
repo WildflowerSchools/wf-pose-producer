@@ -5,14 +5,12 @@ import logging
 import os
 from pathlib import Path
 import sqlite3
-import time
 from uuid import uuid4
 
 import torch
 
 from alphapose.utils.pPose_nms import pose_nms
 from producer.helpers import packb, unpackb, list_to_tensor, columnarize, index_dicts
-from producer.metric import emit
 from producer.beta.posemodel import PoseFrame, Pose2D, Keypoint, Box
 
 
@@ -138,7 +136,7 @@ def run_nms(poses):
         columns = columnarize(poses, ["bbox", "score", "box_id", "keypoints", "kp_score"])
         index = index_dicts(poses, "box_id")
         logging.debug("ids before filter %s", index.keys())
-        boxes, scores, ids, preds_img, preds_scores, pick_ids = \
+        boxes, _, ids, preds_img, preds_scores, _ = \
             pose_nms(
                 list_to_tensor(columns["bbox"]),
                 list_to_tensor(columns["score"]),
@@ -177,5 +175,5 @@ def run_nms(poses):
         with open(file_path, 'w') as fp:
             json.dump(dataclasses.asdict(frame), fp)
             fp.flush()
-    except Exception as err:
+    except Exception:
         logging.exception("image_id %s nms went off the rails", poses[0]["image_id"])

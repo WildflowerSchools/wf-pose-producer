@@ -1,0 +1,27 @@
+{
+  "Comment": "Processes videos for poseprocessing.",
+  "StartAt": "Preload",
+  "States": {
+    "Preload": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-2:204031725010:function:video-preload:1",
+      "Next": "FanoutVideos"
+    },
+    "FanoutVideos": {
+      "Type": "Map",
+      "ItemsPath": "$.videos",
+      "End": true,
+      "MaxConcurrency": 10,
+      "Iterator": {
+        "StartAt": "ExtractFrames",
+        "States": {
+          "ExtractFrames": {
+            "Type": "Task",
+            "Resource": "arn:aws:lambda:us-east-2:204031725010:function:frame-extract:1",
+            "End": true
+          }
+        }
+      }
+    }
+  }
+}

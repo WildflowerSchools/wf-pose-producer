@@ -3,10 +3,8 @@ sys.path.append("/opt/build/AlphaPose")
 
 import concurrent.futures
 from datetime import datetime
-from itertools import chain, islice
-import json
+from itertools import chain
 import logging
-import multiprocessing.shared_memory
 import os
 
 import click
@@ -157,7 +155,7 @@ def cli():
 def main(*args, **kwargs):
     LOG_FORMAT = '%(levelname)-8s %(asctime)s %(name)-10s %(funcName)-15s: %(message)s'
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-    torch.multiprocessing.set_start_method('forkserver', force=True)
+    # torch.multiprocessing.set_start_method('forkserver', force=True)
     job = PoseJob(*args, **kwargs)
     job.start()
 

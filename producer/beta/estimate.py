@@ -1,19 +1,12 @@
-import json
 import logging
-import os
-import time
 
-import click
 import torch
 from alphapose.models import builder
-from alphapose.utils.writer import DataWriter
-from alphapose.utils.file_detector import FileDetectionLoader
 from alphapose.utils.transforms import get_func_heatmap_to_coord
 # from alphapose.utils.pPose_nms import pose_nms
 from alphapose.utils.config import update_config
 
-from producer.helpers import rabbit_params, packb, unpackb, columnarize, ObjectView, list_to_tensor
-from producer.timewith import timewith
+from producer.helpers import columnarize, ObjectView, list_to_tensor
 
 
 EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
@@ -56,9 +49,8 @@ class PoseEstimationWorker:
         norm_type = self.cfg.LOSS.get('NORM_TYPE', None)
         hm_size = self.cfg.DATA_PRESET.HEATMAP_SIZE
         results = []
-        columns = columnarize(batch, ["inp", "orig_img", "im_name", "box", "score", "id", "cropped_box", "date", "path", "assignment_id", "environment_id", "timestamp", "image_id", "box_id"])
+        columns = columnarize(batch, ["inp", "im_name", "box", "score", "id", "cropped_box", "date", "path", "assignment_id", "environment_id", "timestamp", "image_id", "box_id"])
         inps = columns["inp"]
-        orig_img = columns["orig_img"]
         im_name = columns["im_name"]
         image_ids = columns["image_id"]
         box_ids = columns["box_id"]

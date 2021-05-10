@@ -26,5 +26,5 @@ class timewith():
     def __enter__(self):
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, _type, value, traceback):
         self.checkpoint('finished')

@@ -1,8 +1,7 @@
-import logging
 import os
 
 import honeycomb as wildflower
-from gqlpycgen.utils import now, json_dumps
+from gqlpycgen.utils import now
 
 
 HONEYCOMB_URI = os.getenv("HONEYCOMB_URI", "https://honeycomb.api.wildflower-tech.org/graphql")
@@ -23,9 +22,11 @@ def get_client():
     )
 
 
-def create_inference_execution(assignment_id, start, end, sources=list(), model="alphapose", version="v1", honeycomb_client=None):
+def create_inference_execution(assignment_id, start, end, sources=None, model="alphapose", version="v1", honeycomb_client=None):
     if honeycomb_client is None:
         honeycomb_client = get_client()
+    if sources is None:
+        sources = []
     query_pages = """
         mutation createInferenceExecution($inferenceExecution: InferenceExecutionInput) {
           createInferenceExecution(inferenceExecution: $inferenceExecution) { inference_id }
@@ -34,7 +35,7 @@ def create_inference_execution(assignment_id, start, end, sources=list(), model=
     variables = {
         "inferenceExecution": {
             "name": f"{assignment_id}::{start}-->>{end}",
-            "notes": f"created by inference_helper in prepare job",
+            "notes": "created by inference_helper in prepare job",
             "model": model,
             "version": version,
             "data_sources": sources,

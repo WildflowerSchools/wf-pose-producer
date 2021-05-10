@@ -2,15 +2,12 @@
 import json
 import logging
 import os
-import zipfile
-import time
-from multiprocessing.dummy import Pool as ThreadPool
 from collections import defaultdict
 
 import torch
 import numpy as np
 
-''' Constant Configuration '''
+# Constant Configuration
 delta1 = 1
 mu = 1.7
 delta2 = 2.65
@@ -18,12 +15,11 @@ gamma = 22.48
 scoreThreds = 0.3
 matchThreds = 5
 alpha = 0.1
-vis_thr = 0.2
 oks_thr = 0.9
-#pool = ThreadPool(4)
 
 
 def oks_pose_nms(data, soft=False):
+    vis_thr = 0.2
     kpts = defaultdict(list)
     post_data = []
 
@@ -157,7 +153,7 @@ def oks_iou(g, d, a_g, a_d, sigmas=None, vis_thr=None):
             .26, .25, .25, .35, .35, .79, .79, .72, .72, .62, .62, 1.07, 1.07,
             .87, .87, .89, .89
         ]) / 10.0
-    vars = (sigmas * 2)**2
+    variables = (sigmas * 2)**2
     xg = g[0::3]
     yg = g[1::3]
     vg = g[2::3]
@@ -168,7 +164,7 @@ def oks_iou(g, d, a_g, a_d, sigmas=None, vis_thr=None):
         vd = d[n_d, 2::3]
         dx = xd - xg
         dy = yd - yg
-        e = (dx**2 + dy**2) / vars / ((a_g + a_d[n_d]) / 2 + np.spacing(1)) / 2
+        e = (dx**2 + dy**2) / variables / ((a_g + a_d[n_d]) / 2 + np.spacing(1)) / 2
         if vis_thr is not None:
             ind = list(vg > vis_thr) and list(vd > vis_thr)
             e = e[ind]
@@ -176,7 +172,7 @@ def oks_iou(g, d, a_g, a_d, sigmas=None, vis_thr=None):
     return ious
 
 
-def _rescore(overlap, scores, thr, type='gaussian'):
+def _rescore(overlap, scores, thr, _type='gaussian'):
     """Rescoring mechanism gaussian or linear.
     Args:
         overlap: calculated ious
@@ -187,9 +183,9 @@ def _rescore(overlap, scores, thr, type='gaussian'):
         np.ndarray: indexes to keep
     """
     assert len(overlap) == len(scores)
-    assert type in ['gaussian', 'linear']
+    assert _type in ['gaussian', 'linear']
 
-    if type == 'linear':
+    if _type == 'linear':
         inds = np.where(overlap >= thr)[0]
         scores[inds] = scores[inds] * (1 - overlap[inds])
     else:
@@ -245,7 +241,7 @@ def pose_nms(bboxes, bbox_scores, bbox_ids, pose_preds, pose_scores, areaThres=0
 
         # Get numbers of match keypoints by calling PCK_match
         ref_dist = ref_dists[human_ids[mask][pick_id]]
-        simi = get_parametric_distance(pick_id, pose_preds[tensor_mask], pose_scores[tensor_mask], ref_dist)
+        simi = get_parametric_distance(pick_id, pose_preds[tensor_mask], pose_scores[tensor_mask])
         num_match_keypoints = PCK_match(pose_preds[tensor_mask][pick_id], pose_preds[tensor_mask], ref_dist)
 
         # Delete humans who have more than matchThreds keypoints overlap and high similarity
@@ -265,7 +261,7 @@ def pose_nms(bboxes, bbox_scores, bbox_ids, pose_preds, pose_scores, areaThres=0
     scores_pick = ori_pose_scores[pick]
     bbox_scores_pick = ori_bbox_scores[pick]
     bboxes_pick = ori_bboxes[pick]
-    bbox_ids_pick = ori_bbox_ids[pick]
+    # bbox_ids_pick = ori_bbox_ids[pick]
 
     for j, pick_item in enumerate(pick):
         ids = np.arange(kp_nums)
@@ -393,7 +389,7 @@ def p_merge_fast(ref_pose, cluster_preds, cluster_scores, ref_dist):
     return final_pose, final_score
 
 
-def get_parametric_distance(i, all_preds, keypoint_scores, ref_dist):
+def get_parametric_distance(i, all_preds, keypoint_scores):
     pick_preds = all_preds[i]
     pred_scores = keypoint_scores[i]
     dist = torch.sqrt(torch.sum(

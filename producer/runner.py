@@ -1,19 +1,16 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 import gc
-from itertools import chain, islice
-import json
 import logging
 from multiprocessing import Process, Queue
-import re
 import time
 
 import click
-import torch
+# import torch
 from video_io import fetch_videos
 import dateparser
 
 from producer.beta.monolith import PoseJob
-from producer.helpers import chunks, json_dumps
+from producer.helpers import chunks, json_dumps, parse_duration
 
 
 LOG_FORMAT = '%(levelname)-8s %(asctime)s %(processName)-12s %(module)14s[%(lineno)04d]: %(message)s'
@@ -115,6 +112,7 @@ class PoseProducer:
         self.estimator_batch_size = estimator_batch_size
         self.debug = debug
         self.worker_count = worker_count
+        self.queue = queue
         if self.debug:
             logging.info("gpu %s", gpu)
         self.p = Process(target=self, args=(queue, ))
@@ -148,26 +146,13 @@ class PoseProducer:
                     del p_job
                     gc.collect()
                     failures = 0
-            except Exception as e:
+            except Exception:
                 failures += 1
                 logging.exception("problem?")
                 if failures > 10:
                     logging.error("failures too much")
                     return
                 time.sleep(1)
-
-
-TIMEDELTA_REGEX = (r'((?P<days>-?\d+)d)?'
-                   r'((?P<hours>-?\d+)h)?'
-                   r'((?P<minutes>-?\d+)m)?')
-TIMEDELTA_PATTERN = re.compile(TIMEDELTA_REGEX, re.IGNORECASE)
-
-
-def parse_duration(time_str):
-    parts = TIMEDELTA_PATTERN.match(time_str)
-    assert parts is not None, "Could not parse any time information from '{}'.  Examples of valid strings: '8h', '2d8h5m20s', '2m4s'".format(time_str)
-    time_params = {name: float(param) for name, param in parts.groupdict().items() if param}
-    return timedelta(**time_params)
 
 
 @click.group()
@@ -187,11 +172,11 @@ def cli():
 @click.option('--preload-only/--no-preload-only')
 @click.option('--worker-count', required=False, type=int, default=4)
 def main(environment_name, start, duration="8h", producer_batch_size=36, gpus="0", detection_batch_size=8, estimator_batch_size=10, debug=False, worker_count=4, preload_only=False):
-    torch.multiprocessing.set_start_method('forkserver', force=True)
+    # torch.multiprocessing.set_start_method('forkserver', force=True)
     start_date = dateparser.parse(start)  # example: "2021-02-09T07:30:00.000-0600"
     delta = parse_duration(duration)
     end_date = start_date + delta
-    producer = PoseFactory(
+    PoseFactory(
         environment_name,
         start_date,
         end_date,

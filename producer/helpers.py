@@ -1,24 +1,37 @@
 """
 Helper ulility functions used in multiple modules
 """
-import copy
-from datetime import datetime, date
-from enum import EnumMeta
+from datetime import datetime, date, timedelta
 import io
-from itertools import chain, islice
+from itertools import islice
 import json
-import logging
-import os
+import re
 
 import msgpack
 import numpy as np
-import torch
-
-from producer.settings import LOG_FORMAT, LOG_LEVEL
+try:
+    import torch
+except ImportError:
+    torch = None
 
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 DATE_FORMAT = "%Y-%m-%d"
+
+
+
+TIMEDELTA_REGEX = (r'((?P<days>-?\d+)d)?'
+                   r'((?P<hours>-?\d+)h)?'
+                   r'((?P<minutes>-?\d+)m)?')
+TIMEDELTA_PATTERN = re.compile(TIMEDELTA_REGEX, re.IGNORECASE)
+
+
+def parse_duration(time_str):
+    parts = TIMEDELTA_PATTERN.match(time_str)
+    assert parts is not None, "Could not parse any time information from '{}'.  Examples of valid strings: '8h', '2d8h5m20s', '2m4s'".format(time_str)
+    time_params = {name: float(param) for name, param in parts.groupdict().items() if param}
+    return timedelta(**time_params)
+
 
 
 def chunks(it, size):
@@ -31,43 +44,8 @@ class ObjectView:
         self.__dict__ = d
 
 
-def get_json(outdir):
-    try:
-        with open(os.path.join(outdir, 'alphapose-results.json')) as file_handle:
-            return json.load(file_handle)
-    except Exception as exc:
-        logging.error("could not get json %s", exc)
-    return None
-
-
-def output_json_exists(outdir):
-    return os.path.exists(os.path.join(outdir, 'alphapose-results.json'))
-
-
-def get_logger(name):
-    logger = logging.getLogger(name)
-    logger.setLevel(LOG_LEVEL)
-    logging.basicConfig(format=LOG_FORMAT)
-    return logger
-
 def now():
     return datetime.utcnow().strftime(ISO_FORMAT)
-
-
-def rabbit_params():
-    # return pika.ConnectionParameters(
-    #     host=os.environ.get("RABBIT_HOST", "localhost"),
-    #     port=int(os.environ.get("RABBIT_PORT", "5672")),
-    #     credentials=pika.credentials.PlainCredentials(os.environ.get("RABBIT_USER"), os.environ.get("RABBIT_PASS")),
-    #     blocked_connection_timeout=int(os.environ.get("RABBIT_BLOCK_TIMEOUT", "5")),
-    #     heartbeat=int(os.environ.get("RABBIT_HEARTBEAT", "300")),
-    # )
-    return ObjectView({
-        "host": os.environ.get("RABBIT_HOST", "localhost"),
-        "port": int(os.environ.get("RABBIT_PORT", "15672")),
-        "username": os.environ.get("RABBIT_USER"),
-        "password": os.environ.get("RABBIT_PASS"),
-    })
 
 
 def decode(val):
@@ -78,7 +56,8 @@ def decode(val):
 
 class CustomJsonEncoder(json.JSONEncoder):
 
-    def default(self, obj):
+    def default(self, o):
+        obj = o
         if isinstance(obj, bytes):
             return obj.decode("utf8")
         if isinstance(obj, datetime):
@@ -137,7 +116,7 @@ def columnarize(dicts, keys):
         for k in keys:
             buffer[k].append(obj.get(k))
     return buffer
-
+#
 
 def index_dicts(dicts, key, stringify=False):
     index = {}

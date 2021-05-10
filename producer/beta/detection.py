@@ -1,5 +1,4 @@
 import logging
-import os
 
 import torch
 import numpy as np
@@ -59,7 +58,7 @@ class ImageDetectionWorker:
 
         with torch.no_grad():
             # pad useless images to fill a batch, else there will be a bug
-            for pad_i in range(self.batch_size - len(imgs)):
+            for _ in range(self.batch_size - len(imgs)):
                 imgs = torch.cat((imgs, torch.unsqueeze(imgs[0], dim=0)), 0)
                 im_dim_list = torch.cat((im_dim_list, torch.unsqueeze(im_dim_list[0], dim=0)), 0)
 

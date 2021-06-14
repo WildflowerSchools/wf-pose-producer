@@ -1,10 +1,11 @@
 import subprocess
 import sys
 import shlex
-import os
-from retrying import retry
 from subprocess import CalledProcessError
+
+from retrying import retry
 from sagemaker_inference import model_server
+
 
 def _retry_if_error(exception):
     return isinstance(exception, CalledProcessError or OSError)
@@ -15,7 +16,7 @@ def _start_mms():
     # by default the number of workers per model is 1, but we can configure it through the
     # environment variable below if desired.
     # os.environ['SAGEMAKER_MODEL_SERVER_WORKERS'] = '2'
-    model_server.start_model_server(handler_service='/opt/detector_model_handler.py:handle')
+    model_server.start_model_server(handler_service='/opt/wf_model_handler.py:handle')
 
 def main():
     if sys.argv[1] == 'serve':
